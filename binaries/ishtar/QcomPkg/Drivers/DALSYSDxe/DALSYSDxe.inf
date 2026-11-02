@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = DALSYSDxe
+  FILE_GUID                      = 8e9bd160-b184-11df-94e2-0800200c9a66
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|DALSYSDxe.depex|*
+  PE32|DALSYSDxe.efi|*
+
+[Depex]
+  BEFORE: 02 d0 c7 e5 f4 39 d2 cb 47 aa cd 7f 66 ef 76 32

@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = XhciPciEmulationDxe
+  FILE_GUID                      = beb12bee-f6e1-11e1-9fb8-6c626de4aeb1
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|XhciPciEmulationDxe.depex|*
+  PE32|XhciPciEmulationDxe.efi|*
+
+[Depex]
+  BEFORE: 02 ab 31 a0 18 43 b4 1a 4d a5 c0 0c 09 26 1e 9f

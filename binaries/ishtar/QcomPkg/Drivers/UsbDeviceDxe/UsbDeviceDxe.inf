@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = UsbDeviceDxe
+  FILE_GUID                      = 3299a266-15f0-4346-8318-716336736d3e
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|UsbDeviceDxe.depex|*
+  PE32|UsbDeviceDxe.efi|*
+
+[Depex]
+  BEFORE: 02 6b 30 5f fa 7d f4 c4 4a a4 7d 88 2f 82 04 ec

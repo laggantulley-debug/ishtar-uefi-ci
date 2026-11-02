@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = CPRDxe
+  FILE_GUID                      = 1b52138d-3fa3-4e50-b958-20887353f809
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|CPRDxe.depex|*
+  PE32|CPRDxe.efi|*
+
+[Depex]
+  BEFORE: 02 42 b9 37 ae 7f 45 91 4c a1 96 d9 66 9f d3 47

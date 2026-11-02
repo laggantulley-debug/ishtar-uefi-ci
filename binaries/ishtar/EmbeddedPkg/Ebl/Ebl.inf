@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = Ebl
+  FILE_GUID                      = 3cef354a-3b7a-4519-ad70-72a134698311
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|Ebl.depex|*
+  PE32|Ebl.efi|*
+
+[Depex]
+  TRUE

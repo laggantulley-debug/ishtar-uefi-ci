@@ -1,0 +1,36 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = IshtarKeyInputDxe
+  FILE_GUID                      = B7B55E54-303C-4295-8861-A4B9D01CF621
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = IshtarKeyInputDxeEntry
+
+[Sources]
+  IshtarKeyInputDxe.c
+  IshtarSpmiKeys.h
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DevicePathLib
+  UefiRuntimeServicesTableLib
+  BaseMemoryLib
+  DebugLib
+  MemoryAllocationLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+  UefiLib
+
+[Protocols]
+  gEfiSimpleTextInProtocolGuid                  ## PRODUCES
+  gEfiDevicePathProtocolGuid                    ## PRODUCES
+
+[Guids]
+  gEfiEventExitBootServicesGuid                 ## CONSUMES
+  gEfiGlobalVariableGuid                        ## PRODUCES
+
+[Depex]
+  gEfiTimerArchProtocolGuid AND gEfiVariableArchProtocolGuid AND gEfiVariableWriteArchProtocolGuid

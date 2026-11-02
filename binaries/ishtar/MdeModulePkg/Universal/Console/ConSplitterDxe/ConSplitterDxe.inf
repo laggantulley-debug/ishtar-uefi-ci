@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = ConSplitterDxe
+  FILE_GUID                      = 408edcec-cf6d-477c-a5a8-b4844e3de281
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|ConSplitterDxe.depex|*
+  PE32|ConSplitterDxe.efi|*
+
+[Depex]
+  TRUE

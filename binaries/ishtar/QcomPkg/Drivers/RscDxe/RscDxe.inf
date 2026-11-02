@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = RscDxe
+  FILE_GUID                      = ea888df7-d431-44af-844c-7b29390f2758
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|RscDxe.depex|*
+  PE32|RscDxe.efi|*
+
+[Depex]
+  TRUE

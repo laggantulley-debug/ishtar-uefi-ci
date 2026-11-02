@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = SimpleTextInOutSerial
+  FILE_GUID                      = 857a8741-0eec-43bd-9482-27d14ed47d72
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|SimpleTextInOutSerial.depex|*
+  PE32|SimpleTextInOutSerial.efi|*
+
+[Depex]
+  TRUE

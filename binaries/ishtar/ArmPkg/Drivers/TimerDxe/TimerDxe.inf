@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = TimerDxe
+  FILE_GUID                      = 49ea041e-6752-42ca-b0b1-7344fe2546b7
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|TimerDxe.depex|*
+  PE32|TimerDxe.efi|*
+
+[Depex]
+  BEFORE: 02 ea b3 90 28 3d 05 43 16 ad 0c d6 48 08 da 3f

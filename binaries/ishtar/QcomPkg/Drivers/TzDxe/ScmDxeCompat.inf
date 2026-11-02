@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = ScmDxeCompat
+  FILE_GUID                      = d8f91ddc-87c8-42a2-963e-8dd24a9f1fb5
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|ScmDxeCompat.depex|*
+  PE32|ScmDxeCompat.efi|*
+
+[Depex]
+  TRUE

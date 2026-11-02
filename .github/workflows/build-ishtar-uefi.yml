@@ -1,0 +1,66 @@
+name: build-ishtar-uefi
+
+# Builds ishtar's UEFI firmware (SILICIUM_UEFI.fd) from:
+#   Project-Silicium/Mu-Silicium @ hakios/BASE  +  HakiOS hooks  +  ishtarPkg  +  the device's own Binaries/ishtar
+# See ../README.md and ../../HP-TREE-REPORT.md.
+#
+# Runs on a stock x86_64 Ubuntu runner: the aarch64 phone needed two host workarounds
+# (no /dev/shm for edk2's log agent, arm64 BaseTools) that do not apply here.
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git build-essential clang lld llvm nasm python3 python3-venv python3-pip \
+            uuid-dev acpica-tools device-tree-compiler mtools dosfstools mono-complete
+
+      - name: Clone Mu-Silicium at BASE
+        run: |
+          BASE=$(cat hakios/BASE)
+          git clone https://github.com/Project-Silicium/Mu-Silicium.git Mu-Silicium
+          git -C Mu-Silicium checkout "$BASE"
+          echo "Mu-Silicium at $(git -C Mu-Silicium rev-parse --short HEAD) (BASE $BASE)"
+
+      - name: Build
+        run: bash build.sh
+
+      - name: Checks
+        run: |
+          ls -l SILICIUM_UEFI-ishtar.fd
+          test "$(stat -c %s SILICIUM_UEFI-ishtar.fd)" = "3145728"   # 0x300000 = FD_SIZE
+          # the two hooks must be in the tree
+          grep -q "_PayloadLoop" Mu-Silicium/BootShim/BootShim.S
+          grep -q "XnuLoader.h" Mu-Silicium/Silicon/Silicium/SiliciumPkg/Library/BootManagerLib/BootManager.c
+          # the R3 loader must not be in the platform
+          ! grep -q "UniXNUPkg" Mu-Silicium/Platforms/Xiaomi/ishtarPkg/ishtar.dsc
+          ! grep -q "DarwinBootPkg" Mu-Silicium/Platforms/Xiaomi/ishtarPkg/ishtar.dsc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SILICIUM_UEFI-ishtar
+          path: |
+            SILICIUM_UEFI-ishtar.fd
+            Mu-Silicium/Build/ishtarPkg/RELEASE_CLANGPDB/FV/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            Mu-Silicium/Build/BUILDLOG_ishtarPkg.txt
+            Mu-Silicium/Build/ishtarPkg/**/*.txt
+          if-no-files-found: warn

@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = MiToken
+  FILE_GUID                      = 068aae46-bdc6-4073-85d5-31c5eef19a15
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|MiToken.depex|*
+  PE32|MiToken.efi|*
+
+[Depex]
+  TRUE

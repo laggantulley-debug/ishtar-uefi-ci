@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = DxeMain
+  FILE_GUID                      = d6a2cb7f-6a18-4e2f-b43b-9920a733700a
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|DxeMain.depex|*
+  PE32|DxeMain.efi|*
+
+[Depex]
+  TRUE

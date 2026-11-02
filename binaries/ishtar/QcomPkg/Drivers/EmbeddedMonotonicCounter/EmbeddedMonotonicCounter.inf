@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = EmbeddedMonotonicCounter
+  FILE_GUID                      = 37795ba0-e1cf-4ed5-bd8b-16df6bcb1e1a
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|EmbeddedMonotonicCounter.depex|*
+  PE32|EmbeddedMonotonicCounter.efi|*
+
+[Depex]
+  TRUE

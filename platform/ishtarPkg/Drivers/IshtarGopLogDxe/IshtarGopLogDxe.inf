@@ -1,0 +1,29 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = IshtarGopLogDxe
+  FILE_GUID                      = 624776A1-8E95-42AF-9858-E05A00419223
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = IshtarGopLogDxeEntry
+
+[Sources]
+  IshtarGopLogDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  SiliciumPkg/SiliciumPkg.dec
+
+[Depex]
+  TRUE
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  MemoryMapHelperLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+  UefiLib
+
+[Protocols]
+  gEfiGraphicsOutputProtocolGuid                ## CONSUMES

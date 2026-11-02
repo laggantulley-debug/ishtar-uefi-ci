@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = IPCCDxe
+  FILE_GUID                      = 42031f68-1f0b-429b-93f1-0eb0cf89ddbf
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|IPCCDxe.depex|*
+  PE32|IPCCDxe.efi|*
+
+[Depex]
+  BEFORE: 02 42 b9 37 ae 7f 45 91 4c a1 96 d9 66 9f d3 47

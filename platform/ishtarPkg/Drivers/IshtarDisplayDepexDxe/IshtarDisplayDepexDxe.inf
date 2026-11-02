@@ -1,0 +1,20 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = IshtarDisplayDepexDxe
+  FILE_GUID                      = 95C981E6-F022-4B7B-838B-ADB56568FE25
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = IshtarDisplayDepexDxeEntry
+
+[Sources]
+  IshtarDisplayDepexDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[Depex]
+  TRUE
+
+[LibraryClasses]
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint

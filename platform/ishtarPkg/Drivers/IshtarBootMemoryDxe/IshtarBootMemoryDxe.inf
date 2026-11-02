@@ -1,0 +1,31 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = IshtarBootMemoryDxe
+  FILE_GUID                      = A9F247A4-4FCE-4F4C-819E-34407A7DF6B2
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = IshtarBootMemoryDxeEntry
+
+[Sources]
+  IshtarBootMemoryDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  SiliciumPkg/SiliciumPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  DxeServicesTableLib
+  FdtLib
+  HobLib
+  MemoryAllocationLib
+  UefiDriverEntryPoint
+
+[Guids]
+  gSiliciumEntryArgHobGuid                      ## CONSUMES
+
+[Depex]
+  TRUE

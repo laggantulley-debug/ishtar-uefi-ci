@@ -1,0 +1,14 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = UsbKbDxe
+  FILE_GUID                      = 2d2e62cf-9ecf-43b7-8219-94e7fc713dfe
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = EfiEntry
+
+[Binaries.AARCH64]
+  DXE_DEPEX|UsbKbDxe.depex|*
+  PE32|UsbKbDxe.efi|*
+
+[Depex]
+  TRUE
