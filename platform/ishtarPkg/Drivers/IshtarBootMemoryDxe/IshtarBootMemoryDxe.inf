@@ -10,6 +10,7 @@
   IshtarBootMemoryDxe.c
 
 [Packages]
+  ishtarPkg/ishtar.dec
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
   SiliciumPkg/SiliciumPkg.dec

@@ -10,6 +10,7 @@
   IshtarGopLogDxe.c
 
 [Packages]
+  ishtarPkg/ishtar.dec
   MdePkg/MdePkg.dec
   SiliciumPkg/SiliciumPkg.dec
 

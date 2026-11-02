@@ -30,7 +30,9 @@ class CommonPlatform ():
     Scopes = ('ishtar', 'gcc_aarch64_linux', 'edk2-build')
     WorkspaceRoot = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     PackagesPath = (
-        os.path.join(os.environ.get("UNIXNU_ROOT", os.path.join(WorkspaceRoot, "..", "UniXNU")), "package"),
+        # HakiOS route: UniXNUPkg is not part of this build (uefi-ishtar/HOOK-PORT.md),
+        # so its package directory is not a package path any more. Re-add
+        # os.path.join(os.environ.get("UNIXNU_ROOT", ...), "package") to go back to R3.
         "Platforms/Xiaomi",
         "Common/Mu",
         "Common/Mu_OEM_Sample",
@@ -58,7 +60,11 @@ class SettingsManager (UpdateSettingsManager, SetupSettingsManager, PrEvalSettin
 
     def GetRequiredSubmodules (self):
         return [
-            RequiredSubmodule ("Binaries", True),
+            # Binaries is a plain directory here, not the Device-Binaries submodule:
+            # this port uses the drivers extracted from *this unit's own* uefi.img
+            # (uefi-ishtar/HOOK-PORT.md §6), and the public set differs in 5 modules
+            # including DisplayDxe. False = not required to be a submodule.
+            RequiredSubmodule ("Binaries", False),
             RequiredSubmodule ("Common/Mu", True),
             RequiredSubmodule ("Common/Mu_OEM_Sample", True),
             RequiredSubmodule ("Mu_Basecore", True),

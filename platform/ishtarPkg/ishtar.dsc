@@ -78,7 +78,8 @@
   gSiliciumPkgTokenSpaceGuid.PcdFrameBufferColorDepth|32
   # Scale 2 gives 100 lines of 90 columns. The log wraps, so the screen always shows the
   # newest lines; the platform debug level is left unchanged.
-  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferFontScale|2
+  # [host/uEFI fix] not declared in any DEC at Mu-Silicium e51cd87: gSiliciumPkgTokenSpaceGuid.PcdFrameBufferFontScale|2
+  #  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferFontScale|2
   # Pause per log line so a video of the screen shows what loads last.
   gSiliciumPkgTokenSpaceGuid.PcdFrameBufferDelay|30000
 
@@ -90,7 +91,8 @@
 !if $(ISHTAR_VENDOR_HW) == 0
   # Intermittent stall right after "MMU: enabled" (int-103 photos): PlatformPeim scanned the stock UEFI's leftover FD window and
   # called into its scheduler protocol. Without the stock vendor drivers nothing reads those HOBs.
-  gQcomPkgTokenSpaceGuid.PcdBuildXblHobs|FALSE
+  # [host/uEFI fix] not declared in any DEC at Mu-Silicium e51cd87: gQcomPkgTokenSpaceGuid.PcdBuildXblHobs|FALSE
+  #  gQcomPkgTokenSpaceGuid.PcdBuildXblHobs|FALSE
 !endif
 
 [LibraryClasses]

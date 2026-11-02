@@ -11,6 +11,7 @@
   IshtarSpmiKeys.h
 
 [Packages]
+  ishtarPkg/ishtar.dec
   MdePkg/MdePkg.dec
 
 [LibraryClasses]

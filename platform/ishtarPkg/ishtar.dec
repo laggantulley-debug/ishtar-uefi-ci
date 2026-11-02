@@ -1,0 +1,21 @@
+##
+#  ishtar platform package (Xiaomi 13 Ultra, SM8550-AB)
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = ishtarPkg
+  PACKAGE_GUID                   = 4C1F5E2A-9B37-4D86-8E14-2A7B6C0D9F31
+  PACKAGE_VERSION                = 0.1
+
+[Guids]
+  #
+  # PLACEHOLDER. SiliciumPkg at this BASE (Mu-Silicium e51cd87, the HakiOS base commit)
+  # neither declares this GUID nor produces the HOB: the argument handoff it belongs to
+  # came from the UniXNU loader that the HakiOS route replaces. IshtarBootMemoryDxe
+  # handles a missing HOB ("ISHTARMEM: no entry argument HOB", returns EFI_SUCCESS),
+  # so the value is inert here. Replace it with the upstream value if this platform is
+  # ever moved to a SiliciumPkg that declares gSiliciumEntryArgHobGuid.
+  #
+  gSiliciumEntryArgHobGuid       = { 0x6F0A4D67, 0x8F7B, 0x4A02, { 0x9A, 0x3C, 0x1F, 0x00, 0x27, 0x51, 0xA8, 0x6B } }

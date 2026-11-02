@@ -10,5 +10,6 @@
   ConfigurationMapLib.c
 
 [Packages]
+  ishtarPkg/ishtar.dec
   MdePkg/MdePkg.dec
   QcomPkg/QcomPkg.dec

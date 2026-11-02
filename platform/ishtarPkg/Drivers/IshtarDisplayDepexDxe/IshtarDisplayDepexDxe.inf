@@ -10,6 +10,7 @@
   IshtarDisplayDepexDxe.c
 
 [Packages]
+  ishtarPkg/ishtar.dec
   MdePkg/MdePkg.dec
 
 [Depex]
