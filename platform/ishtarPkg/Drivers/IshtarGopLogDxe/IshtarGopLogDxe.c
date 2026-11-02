@@ -12,7 +12,34 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
-#include <Library/FrameBufferHandoff.h>
+//
+// Library/FrameBufferHandoff.h does not exist in SiliciumPkg at the HakiOS base commit
+// (Mu-Silicium e51cd87): there, FrameBufferSerialPortLib draws with its own build-time
+// geometry (Library/FrameBufferSerialPortLib/FrameBuffer.h) and nothing consumes this
+// struct, so the values below are inert here -- the driver only writes a marker into the
+// reserved region. When the base provides the real header, __has_include takes it and
+// this fallback disappears.
+//
+#if defined(__has_include)
+#  if __has_include(<Library/FrameBufferHandoff.h>)
+#    include <Library/FrameBufferHandoff.h>
+#    define ISHTAR_HAVE_FB_HANDOFF_HEADER  1
+#  endif
+#endif
+
+#ifndef ISHTAR_HAVE_FB_HANDOFF_HEADER
+typedef struct {
+  UINT64    Base;
+  UINT32    Width;
+  UINT32    Height;
+  UINT32    PitchBytes;
+  UINT32    Pad0;
+  UINT64    Magic;
+} FB_HANDOFF;
+
+#define FB_HANDOFF_MAGIC   0x313046424E493055ULL   /* "U0INBF01", inert at this base */
+#define FB_HANDOFF_OFFSET  0x100                   /* keep 256 bytes clear at the region end */
+#endif
 #include <Library/MemoryMapHelperLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>

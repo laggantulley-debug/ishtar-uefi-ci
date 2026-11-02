@@ -1,3 +1,4 @@
+#include <Uefi.h>
 /** @file
   Hardware keys of the Xiaomi Pad 6S Pro through the SPMI PMIC arbiter, as pure register-pointer code (host-testable).
 
@@ -14,7 +15,6 @@
 #ifndef ISHTAR_SPMI_KEYS_H_
 #define ISHTAR_SPMI_KEYS_H_
 
-#include <stdint.h>
 
 enum {
   SK_VERSION_V7_MIN = 0x70000000u, SK_VERSION_V8_MIN = 0x80000000u,
@@ -31,35 +31,35 @@ enum {
 };
 
 struct sk_arbiter {
-  volatile uint32_t *core;   // 0x3000 bytes
-  volatile uint32_t *obs;    // observer channels of this EE and above (EE 0 starts at the base)
-  uint8_t ee;
+  volatile UINT32 *core;   // 0x3000 bytes
+  volatile UINT32 *obs;    // observer channels of this EE and above (EE 0 starts at the base)
+  UINT8 ee;
 };
 
 // 0 and *apid on success. 1 unknown layout, 2 no APIDs, 3 PPID not mapped.
-static inline int sk_find_apid (const struct sk_arbiter *a, uint32_t ppid, int *apid)
+static inline int sk_find_apid (const struct sk_arbiter *a, UINT32 ppid, int *apid)
 {
-  uint32_t version = a->core[0], apids = a->core[SK_FEATURES / 4] & SK_FEATURES_APIDS_MASK;
+  UINT32 version = a->core[0], apids = a->core[SK_FEATURES / 4] & SK_FEATURES_APIDS_MASK;
   *apid = -1;
   if (version < SK_VERSION_V7_MIN || version >= SK_VERSION_V8_MIN) return 1;
   if (!apids || apids > 1024) return 2;
-  for (uint32_t i = 0; i < apids; ++i) {
-    uint32_t map = a->core[(SK_APID_MAP + 4 * i) / 4];
+  for (UINT32 i = 0; i < apids; ++i) {
+    UINT32 map = a->core[(SK_APID_MAP + 4 * i) / 4];
     if (map && ((map >> 8) & 0xfff) == ppid) { *apid = (int) i; break; }
   }
   return *apid < 0 ? 3 : 0;
 }
 
 // One register byte through the observer channel. 0 ok, 1 timeout, 2 the arbiter reported an error.
-static inline int sk_read8 (const struct sk_arbiter *a, int apid, uint8_t reg, uint8_t *value)
+static inline int sk_read8 (const struct sk_arbiter *a, int apid, UINT8 reg, UINT8 *value)
 {
-  volatile uint32_t *ch = a->obs + (SK_OBS_EE_STRIDE * a->ee + SK_OBS_APID_STRIDE * (uint32_t) apid) / 4;
-  ch[SK_CMD / 4] = ((uint32_t) SK_OP_EXT_READL << 27) | ((uint32_t) reg << 4);
+  volatile UINT32 *ch = a->obs + (SK_OBS_EE_STRIDE * a->ee + SK_OBS_APID_STRIDE * (UINT32) apid) / 4;
+  ch[SK_CMD / 4] = ((UINT32) SK_OP_EXT_READL << 27) | ((UINT32) reg << 4);
   for (unsigned n = 0; n < SK_POLLS; ++n) {
-    uint32_t s = ch[SK_STATUS / 4];
+    UINT32 s = ch[SK_STATUS / 4];
     if (s & SK_STATUS_DONE) {
       if (s & SK_STATUS_ERRORS) return 2;
-      *value = (uint8_t) ch[SK_RDATA0 / 4];
+      *value = (UINT8) ch[SK_RDATA0 / 4];
       return 0;
     }
   }
@@ -77,9 +77,9 @@ static inline int sk_open (const struct sk_arbiter *a, struct sk_keys *k)
 }
 
 // Pressed keys as SK_KEY_* bits. 0 ok; non-zero when a read failed (nothing is reported pressed then).
-static inline int sk_sample (const struct sk_arbiter *a, const struct sk_keys *k, uint8_t *pressed)
+static inline int sk_sample (const struct sk_arbiter *a, const struct sk_keys *k, UINT8 *pressed)
 {
-  uint8_t v = 0;
+  UINT8 v = 0;
   *pressed = 0;
   int rc = sk_read8 (a, k->pon, SK_REG_RT_STS, &v);
   if (rc) return rc;
@@ -95,17 +95,17 @@ static inline int sk_sample (const struct sk_arbiter *a, const struct sk_keys *k
 
 // Debounce and auto-repeat. A key counts as pressed after two identical samples. Volume keys repeat while held: first after
 // `delay` polls, then every `period` polls. step() returns the keys to report now (new presses plus repeats).
-struct sk_filter { uint8_t last, stable; uint16_t held[3]; };
+struct sk_filter { UINT8 last, stable; UINT16 held[3]; };
 
-static inline uint8_t sk_step (struct sk_filter *f, uint8_t sample, uint16_t delay, uint16_t period)
+static inline UINT8 sk_step (struct sk_filter *f, UINT8 sample, UINT16 delay, UINT16 period)
 {
-  uint8_t out = 0;
+  UINT8 out = 0;
   if (sample == f->last) {
-    uint8_t fresh = (uint8_t) (sample & ~f->stable);
+    UINT8 fresh = (UINT8) (sample & ~f->stable);
     f->stable = sample;
     out = fresh;
     for (unsigned i = 0; i < 3; ++i) {
-      uint8_t bit = (uint8_t) (1u << i);
+      UINT8 bit = (UINT8) (1u << i);
       if (!(sample & bit)) { f->held[i] = 0; continue; }
       if (fresh & bit) { f->held[i] = 0; continue; }
       ++f->held[i];
