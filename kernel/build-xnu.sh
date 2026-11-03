@@ -125,10 +125,13 @@ WRAP
     log "unifdef 已换成带私有块剥离参数的包装器"
 fi
 
-# TargetConditionals.h：公开 SDK 里没有，XNU 的 debug.h 需要它；参考树自带一份
-for inc in "$XNU_SDK_PATH/usr/include" "$WORK/theos/sdks/iPhoneOS16.5.sdk/usr/include"; do
-    if [ -d "$inc" ] && [ ! -f "$inc/TargetConditionals.h" ]; then
-        cp "$HERE/xnu-deps/build/pthread/inc/TargetConditionals.h" "$inc/" 2>/dev/null && \
+# TargetConditionals.h：公开 SDK 里没有，XNU 的 debug.h 需要它；参考树自带一份。
+# 注意 XNU_SDK_PATH 在 xnu-env.sh 里才定义（这里还没 source），所以要自己拼路径。
+TC_SRC="$HERE/xnu-deps/build/pthread/inc/TargetConditionals.h"
+for inc in "$HERE/xnu-deps/sdk/iPhoneOS16.5.xnu.sdk/usr/include" \
+           "$WORK/theos/sdks/iPhoneOS16.5.sdk/usr/include"; do
+    if [ -d "$inc" ] && [ -f "$TC_SRC" ]; then
+        cp -f "$TC_SRC" "$inc/TargetConditionals.h" 2>/dev/null && \
             log "补 TargetConditionals.h -> $inc"
     fi
 done
