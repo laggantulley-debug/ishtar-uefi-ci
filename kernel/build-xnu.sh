@@ -47,8 +47,16 @@ fi
 [ -d "$WORK/sdks/iPhoneOS16.5.sdk/usr/include" ] || { log "没有 iPhoneOS16.5.sdk"; ls "$WORK/sdks" | head; exit 1; }
 
 # ---------------------------------------------------------------- 3. the $THEOS layout setup.sh expects
-mkdir -p "$WORK/theos/toolchain/linux/iphone" "$WORK/theos/sdks"
-ln -sfn "$WORK/cctools/bin" "$WORK/theos/toolchain/linux/iphone/bin"
+mkdir -p "$WORK/theos/toolchain/linux/iphone/bin" "$WORK/theos/sdks"
+# cctools-port installs the tools under the target triple (aarch64-apple-darwin-ld, ...),
+# while xnu-deps/setup.sh looks for the theos layout with plain names (ld, nm, otool, ...).
+for tool in ld nm otool strip lipo libtool nmedit ctf_insert codesign_allocate \
+            install_name_tool ar ranlib as size strings ObjectDump; do
+    [ -e "$WORK/cctools/bin/aarch64-apple-darwin-$tool" ] && \
+        ln -sfn "$WORK/cctools/bin/aarch64-apple-darwin-$tool" "$WORK/theos/toolchain/linux/iphone/bin/$tool"
+done
+ln -sfn "$WORK/theos/toolchain/linux/iphone/bin" "$WORK/theos/toolchain/linux/iphone/bin-link"
+ls "$WORK/theos/toolchain/linux/iphone/bin" | tr '\n' ' '; echo
 ln -sfn "$WORK/sdks/iPhoneOS16.5.sdk" "$WORK/theos/sdks/iPhoneOS16.5.sdk"
 export THEOS="$WORK/theos"
 
@@ -67,7 +75,7 @@ export DARWIN_REDWOOD="$HERE"
 # ---------------------------------------------------------------- 5. dependencies, then the kernel
 log "xnu-deps/setup.sh"
 ( cd "$HERE" && bash xnu-deps/setup.sh ) >"$WORK/setup.log" 2>&1 \
-    || { log "setup.sh 失败"; tail -40 "$WORK/setup.log"; exit 1; }
+    || { log "setup.sh 失败，日志如下："; cat "$WORK/setup.log" | tail -60; exit 1; }
 
 log "xnu-build.sh (MACHINE=BCM2837 XNU_ARCH=$ARCH_STR)"
 ( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
