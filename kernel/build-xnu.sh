@@ -197,4 +197,25 @@ HDR="$EXPORT_DIR/osfmk/kern/lock_rw.h"
 [ -f "$HDR" ] && { log "最终 lock_rw.h: $(wc -l < "$HDR") 行"; grep -n "XNU_KERNEL_PRIVATE" "$HDR" | head -3; }
 log "没有产出内核，xnubuild.log 末尾："
 tail -60 "$WORK/xnubuild.log"
+
+# ---- 收集给外部诊断用的材料（生成后的 Makefile、实际命令、导出头样本）----------
+DBG="$WORK/debug"; mkdir -p "$DBG"
+log "收集诊断材料到 $DBG"
+# 1) 生成后的 Makefile（挑 osfmk 的）
+find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -type d -name 'DEVELOPMENT' 2>/dev/null | head -5 | while read d; do
+    [ -f "$d/Makefile" ] && cp "$d/Makefile" "$DBG/generated-$(basename "$(dirname "$d")")-Makefile" 2>/dev/null
+done
+# 2) make 实际会执行的命令（干跑）
+( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
+    bash -c 'exec make -n exporthdrs REDWOOD_OBJECTS= SDKROOT=iphoneos ARCH_CONFIGS=ARM64 \
+      MACHINE_CONFIGS=BCM2837 KERNEL_CONFIGS=DEVELOPMENT BUILD_WERROR=0 BUILD_LTO=0 \
+      DO_CTFMERGE=0 BUILD_DSYM=0 CC=xnu-clang CXX=xnu-clang++ 2>&1' ) \
+  | grep -iE "unifdef|EXPORT_HDRS" | head -40 > "$DBG/make-n-unifdef.txt" 2>/dev/null
+# 3) 导出头样本（前 80 行 + 行数）
+H="$XNU_ROOT/BUILD/obj/EXPORT_HDRS/osfmk/kern/lock_rw.h"
+[ -f "$H" ] && { wc -l "$H" > "$DBG/exported-lock_rw-head.txt"; head -80 "$H" >> "$DBG/exported-lock_rw-head.txt"; }
+# 4) 工具与版本
+{ command -v unifdef; unifdef -h 2>&1 | head -3; ls -l "$HERE/xnu-deps/host/bin" 2>/dev/null; \
+  clang --version 2>&1 | head -2; } > "$DBG/tools.txt" 2>&1
+ls -l "$DBG"
 exit 1
