@@ -71,6 +71,23 @@ if [ -d "$HERE/xnu-deps/host/bin" ]; then
     log "宿主工具已装到 /usr/local/bin：$(ls /usr/local/bin 2>/dev/null | grep -cE 'unifdef|xcrun|sw_vers|plutil|codesign|iig|tcsh') 个"
 fi
 
+# 让每一次 unifdef 调用都带上"剥私有块"的参数。
+# 导出的头文件在构建过程中会被重新生成，我们事后剥一次不够；而上游 make 规则
+# 传进来的参数在这套环境里是空的（unifdef 空参 = 原样输出），所以直接换成包装器：
+# 无论调用方传什么，私有块一律剥掉。
+if [ -x /usr/local/bin/unifdef ] && [ ! -x /usr/local/bin/unifdef.real ]; then
+    mv /usr/local/bin/unifdef /usr/local/bin/unifdef.real
+    cat > /usr/local/bin/unifdef <<'WRAP'
+#!/bin/sh
+exec /usr/local/bin/unifdef.real "$@" \
+    -UMACH_KERNEL_PRIVATE -UBSD_KERNEL_PRIVATE -UIOKIT_KERNEL_PRIVATE \
+    -ULIBKERN_KERNEL_PRIVATE -ULIBSA_KERNEL_PRIVATE -UPEXPERT_KERNEL_PRIVATE \
+    -UXNU_KERNEL_PRIVATE -UEXCLAVEKIT -UEXCLAVECORE
+WRAP
+    chmod +x /usr/local/bin/unifdef
+    log "unifdef 已换成带私有块剥离参数的包装器"
+fi
+
 log "setup.sh --stage2（导出头文件 + 静态库）"
 ( cd "$HERE" && bash xnu-deps/setup.sh --stage2 ) >>"$WORK/setup.log" 2>&1
 STAGE2_RC=$?
