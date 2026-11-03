@@ -16,3 +16,8 @@ export XNU_ARCH=${XNU_ARCH:-arm64}
 # On macOS the cctools, mig, unifdef and csh come from Xcode and the system instead of theos and
 # sources built here; the scripts look at this to choose.
 [ "$(uname -s)" = Darwin ] && export XNU_HOST_DARWIN=1
+
+# 本机修补（ishtar CI）：上面这一行在非 Darwin 主机上返回 1；setup.sh 用 set -e 且
+# 紧接着 source 本文件，于是脚本会「无声退出」（日志空、只看得到 exit 1）。
+# 用一行必然成功的 `:` 收尾，让 source 的返回码始终为 0。
+:
