@@ -83,6 +83,26 @@ else
     log "stage2 完成"
 fi
 
+# 导出头文件自己剥一遍 XNU_KERNEL_PRIVATE 族。
+# 上游 make 的 UNIFDEF 规则在这套环境里没生效（导出的是原样拷贝，1186 行），
+# 而内核代码会 -I 到 EXPORT_HDRS，于是 lock_rw.h/upsi.h 的私有块以"未定义类型"炸出来。
+# 参数取自 makedefs/MakeInc.def 的 XNU_PRIVATE_UNIFDEF（参考实现 xnu-deps/setup.sh 同源）。
+STRIP_FLAGS="-UMACH_KERNEL_PRIVATE -UBSD_KERNEL_PRIVATE -UIOKIT_KERNEL_PRIVATE -ULIBKERN_KERNEL_PRIVATE -ULIBSA_KERNEL_PRIVATE -UPEXPERT_KERNEL_PRIVATE -UXNU_KERNEL_PRIVATE -UEXCLAVEKIT -UEXCLAVECORE"
+EXPORT_DIR="$XNU_ROOT/BUILD/obj/EXPORT_HDRS"
+if [ -d "$EXPORT_DIR" ] && command -v unifdef >/dev/null 2>&1; then
+    n=0
+    while IFS= read -r -d '' f; do
+        unifdef $STRIP_FLAGS "$f" > "$f.strip" 2>/dev/null
+        rc=$?
+        if [ $rc -eq 0 ] || [ $rc -eq 1 ]; then mv "$f.strip" "$f"; n=$((n+1)); else rm -f "$f.strip"; fi
+    done < <(find "$EXPORT_DIR" -name '*.h' -print0)
+    log "已剥私有块的头文件：$n 个"
+    HDR="$EXPORT_DIR/osfmk/kern/lock_rw.h"
+    [ -f "$HDR" ] && log "核对 lock_rw.h: $(wc -l < "$HDR") 行，__lck_rw_other_extern $(grep -c __lck_rw_other_extern "$HDR") 次"
+else
+    log "跳过导出头处理（目录或 unifdef 缺失）"
+fi
+
 log "xnu-build.sh（MACHINE=BCM2837 XNU_ARCH=$ARCH_STR）"
 ( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
     bash xnu-build.sh -j"$NPROC" -k ) >"$WORK/xnubuild.log" 2>&1
