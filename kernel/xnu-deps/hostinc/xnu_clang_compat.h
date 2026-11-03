@@ -27,13 +27,16 @@
  * __builtin_clzg / __builtin_ctzg（带 fallback 的 count-leading/trailing-zeros）
  * 是 clang-19 才有的；Ubuntu 24.04 的 clang-18 不认识，osfmk/kern/bits.h 却在
  * 每个 uint64_t 上用它，于是报 "use of unknown builtin"。
- * 这里用 clzll/ctzll 给出等价实现（入参是 uint64_t，语义一致）。
+ *
+ * 注意：这个头文件也会被 mig 解析（生成 kextd_mach.h 等），而 mig 只认宏、
+ * 不接受函数定义——所以这里必须用纯宏，不能写 static inline。
+ * bits.h 的调用点都是普通变量，重复求值没有副作用。
  */
 #if !__has_builtin(__builtin_clzg)
-static inline int __xnu_clzg_u64(uint64_t x, int fallback) { return x ? __builtin_clzll(x) : fallback; }
-#define __builtin_clzg(x, fallback)     __xnu_clzg_u64((uint64_t)(x), (int)(fallback))
+#define __builtin_clzg(x, fallback) \
+	((x) ? (int)__builtin_clzll((unsigned long long)(x)) : (int)(fallback))
 #endif
 #if !__has_builtin(__builtin_ctzg)
-static inline int __xnu_ctzg_u64(uint64_t x, int fallback) { return x ? __builtin_ctzll(x) : fallback; }
-#define __builtin_ctzg(x, fallback)     __xnu_ctzg_u64((uint64_t)(x), (int)(fallback))
+#define __builtin_ctzg(x, fallback) \
+	((x) ? (int)__builtin_ctzll((unsigned long long)(x)) : (int)(fallback))
 #endif
