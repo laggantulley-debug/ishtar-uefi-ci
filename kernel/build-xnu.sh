@@ -94,6 +94,17 @@ PATCH
 export XNU_SRC="$XNU_ROOT"
 export DARWIN_REDWOOD="$HERE"
 
+# 设备层需要、但 dada 补丁没带的文件（目前只有触控固件头 redwood_focaltech_fw.h，706 KB）。
+# 按相对路径补进源码树；已存在就不动，免得覆盖补丁里的版本。
+if [ -d "$HERE/xnu-extras" ]; then
+    ( cd "$HERE/xnu-extras" && find . -type f -print0 | while IFS= read -r -d '' f; do
+        t="$XNU_ROOT/${f#./}"
+        [ -f "$t" ] && continue
+        mkdir -p "$(dirname "$t")" && cp "$f" "$t" && \
+            log "补进源码树：${f#./}（$(stat -c %s "$f") 字节）"
+    done )
+fi
+
 chmod +x "$HERE/xnu-build.sh" "$HERE/xnu-env.sh" 2>/dev/null
 find "$HERE/xnu-deps" -name '*.sh' -exec chmod +x {} + 2>/dev/null
 [ -d "$HERE/xnu-deps/host/bin" ] && find "$HERE/xnu-deps/host/bin" -type f -exec chmod +x {} + 2>/dev/null

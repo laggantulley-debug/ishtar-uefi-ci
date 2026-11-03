@@ -242,7 +242,7 @@ stage2() {
 			-Ilibdispatch -Ilibdispatch/src -Ilibdispatch/src/firehose \
 			-I$hdrs/osfmk -I$hdrs/bsd -I$hdrs/libkern -I$hdrs/pexpert -I$hdrs/iokit -I$hdrs/security \
 			-I$XNU_SRC/libkern/firehose -I$hdrs/libkern/os -I$XNU_SRC/EXTERNAL_HEADERS \
-			-I$XNU_SDK_PATH/usr/local/include/kernel \
+			-I$XNU_SDK_PATH/usr/local/include/kernel -I$XNUDEPS/build/pthread/inc \
 			-o build/firehose/firehose_buffer.o libdispatch/src/firehose/firehose_buffer.c
 		libtool -static -o $lib/libfirehose_kernel.a build/firehose/firehose_buffer.o
 	fi

@@ -17,5 +17,9 @@ for a in "$@"; do
     *) args+=("$a");;
   esac
 done
-exec /usr/bin/$drv -include "$HB/../../hostinc/xnu_clang_compat.h" -target arm64-apple-ios${XNU_SDK_VERSION:-16.5} --ld-path="$HB/ld64" \
+# 指针认证的寄存器（APIAKeyLo_EL1 / APGAKeyLo_EL1）要 arm64 后端带 pauth 特性才被汇编器认；
+# 不带就报 "expected readable system register"（osfmk/arm64/sleh.c、arm64/start.s）。
+# 基线保持 armv8-a（A53 没有 LSE，-march=armv8.3-a 会让编译器发 ldadd 之类），只加 pauth。
+exec /usr/bin/$drv -include "$HB/../../hostinc/xnu_clang_compat.h" -target arm64-apple-ios${XNU_SDK_VERSION:-16.5} \
+  -march=${XNU_MARCH:-armv8-a+pauth} --ld-path="$HB/ld64" \
   -w "${extra[@]}" "${args[@]}"
