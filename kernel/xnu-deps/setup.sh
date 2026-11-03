@@ -231,8 +231,12 @@ stage2() {
 	if [ ! -f $lib/libfirehose_kernel.a ]; then
 		log "building libfirehose_kernel.a"
 		mkdir -p build/firehose
+		# XNU_KERNEL_PRIVATE 必须「不定义」而不是「定义成 0」：XNU 的公开头文件里
+		# #if XNU_KERNEL_PRIVATE 与 #ifdef XNU_KERNEL_PRIVATE 混用，值为 0 时前者不成立、
+		# 后者成立，于是 lck_rw_other_t / __lck_rw_other_extern 的 typedef 与宏被跳过，
+		# 而 23 条用到它们的声明留下 → unknown type name '__lck_rw_other_extern'。
 		xnu-clang -arch ${XNU_ARCH:-arm64} -c -Os -mkernel -nostdinc -fno-builtin \
-			-DKERNEL=1 -DKERNEL_PRIVATE=1 -DXNU_KERNEL_PRIVATE=0 -DPRIVATE=1 -D__DARWIN_64_BIT_INO_T=1 \
+			-DKERNEL=1 -DKERNEL_PRIVATE=1 -UXNU_KERNEL_PRIVATE -DPRIVATE=1 -D__DARWIN_64_BIT_INO_T=1 \
 			-DDISPATCH_USE_DTRACE=0 -DOS_ATOMIC_CONFIG_MEMORY_ORDER_DEPENDENCY=1 \
 			-DOS_ATOMIC_CONFIG_STARVATION_FREE_ONLY=0 -DOS_FIREHOSE_SPI=1 -DARM64_BOARD_CONFIG_BCM2837 \
 			-Ilibdispatch -Ilibdispatch/src -Ilibdispatch/src/firehose \

@@ -53,35 +53,36 @@ if [ ! -d "$XNU_ROOT" ]; then
     git -C "$XNU_ROOT" apply --whitespace=nowarn "$HERE/xnu-12377.121.6-dada.patch" \
         || { log "dada 补丁打不上"; exit 1; }
 fi
-# ---------------------------------------------------------------- 4b. 修 XNU 的导出头规则
-# MakeInc.rule 的 INSTALLHDRS 模板用 $(UNIFDEF) $(4) 生成导出头；在本环境里 $(4)
-# （SPINCFRAME_UNIFDEF 等）展开为空，空参 unifdef 等于原样拷贝，于是导出头保留了
-# XNU_KERNEL_PRIVATE 私有块，内核代码 -I 过去就报未定义类型。
-# 修法：把私有块剥离参数**字面量**写进模板（不依赖变量展开时机），并把 UNIFDEF 固定成绝对路径。
+
+# ---------------------------------------------------------------- 4b. 不再改写导出头规则
+# 2026-11-03 之前，这里有一整套「修导出头」的动作：往 makedefs/MakeInc.rule 的 INSTALLHDRS
+# 模板里写字面量 -U… 剥离参数、把 unifdef 换成"每次调用都追加 -U"的包装器、给 SDK 打
+# TargetConditionals.h 桩、以及把 EXPORT_HDRS 里 1120 个头全量剥两遍。这些全部删除。
+#
+# 根因（已用 clang 在本机复现，见 KERNEL-BUILD-STATUS.md）：
+#   xnu-deps/setup.sh 编 libfirehose_kernel.a 时传了 -DXNU_KERNEL_PRIVATE=0。
+#   XNU 的锁头里 #if 与 #ifdef 混用：值 0 让 `#ifdef XNU_KERNEL_PRIVATE` 成立、
+#   却让 `#if XNU_KERNEL_PRIVATE` 不成立 —— 于是 lck_rw_other_t / __lck_rw_other_extern
+#   的 typedef 与宏被跳过，23 条用到它们的声明留下 → unknown type name。
+#   改成 -UXNU_KERNEL_PRIVATE（不定义）后 #if 与 #ifdef 一致，整段同生同死。
+#
+# 为什么不能再剥导出头：
+#   BUILD/obj/EXPORT_HDRS 本来就是 INSTALL 直拷（MakeInc.rule:478/491），上游从不剥它；
+#   剥掉 `#ifdef XNU_KERNEL_PRIVATE` 会把 osfmk/kern/debug.h 的 #else 分支
+#   （`#include <TargetConditionals.h>`）剥成活的，内核编译直接 1383 条 fatal error。
+#   内核编译自己带着 -DXNU_KERNEL_PRIVATE -DMACH_KERNEL_PRIVATE（MakeInc.def:158 + 组件
+#   Makefile:22），原样的头是正确的。
+#
+# UNIFDEF 指到绝对路径这一条保留：MakeInc.cmd:261 用 $(shell $(XCRUN) -find unifdef) 求值，
+# 让工具必须先被找到；这只影响 System.framework 那套框架头（内核不读），与内核无关。
+
 python3 - "$XNU_ROOT" <<'PATCH'
 import sys, os
 root = sys.argv[1]
-FLAGS = ("-UMACH_KERNEL_PRIVATE -UBSD_KERNEL_PRIVATE -UIOKIT_KERNEL_PRIVATE "
-         "-ULIBKERN_KERNEL_PRIVATE -ULIBSA_KERNEL_PRIVATE -UPEXPERT_KERNEL_PRIVATE "
-         "-UXNU_KERNEL_PRIVATE -UEXCLAVEKIT -UEXCLAVECORE")
-
-# 1) 模板里强制带剥离参数
-p = os.path.join(root, 'makedefs/MakeInc.rule')
-s = open(p).read()
-old = "$$(_v)$$(UNIFDEF) $(4) $$< > ./$(3)/$$*.unifdef.$$$$$$$$;"
-new = "$$(_v)$$(UNIFDEF) $(4) " + FLAGS + " $$< > ./$(3)/$$*.unifdef.$$$$$$$$;"
-if old in s and FLAGS not in s:
-    s = s.replace(old, new, 1)
-    open(p, 'w').write(s)
-    print('MakeInc.rule: INSTALLHDRS 模板已加剥离参数')
-else:
-    print('MakeInc.rule: 已打过或锚点不匹配')
-
-# 2) UNIFDEF 固定为绝对路径，不再靠 $(shell $(XCRUN) ...) 求值
 p = os.path.join(root, 'makedefs/MakeInc.cmd')
 s = open(p).read()
-old = "	export UNIFDEF := $(shell $(XCRUN) -sdk $(SDKROOT) -find unifdef)"
-new = "	export UNIFDEF := /usr/local/bin/unifdef"
+old = "\texport UNIFDEF := $(shell $(XCRUN) -sdk $(SDKROOT) -find unifdef)"
+new = "\texport UNIFDEF := /usr/local/bin/unifdef"
 if old in s:
     s = s.replace(old, new, 1)
     open(p, 'w').write(s)
@@ -108,117 +109,100 @@ if [ -d "$HERE/xnu-deps/host/bin" ]; then
     log "宿主工具已装到 /usr/local/bin：$(ls /usr/local/bin 2>/dev/null | grep -cE 'unifdef|xcrun|sw_vers|plutil|codesign|iig|tcsh') 个"
 fi
 
-# 让每一次 unifdef 调用都带上"剥私有块"的参数。
-# 导出的头文件在构建过程中会被重新生成，我们事后剥一次不够；而上游 make 规则
-# 传进来的参数在这套环境里是空的（unifdef 空参 = 原样输出），所以直接换成包装器：
-# 无论调用方传什么，私有块一律剥掉。
-if [ -x /usr/local/bin/unifdef ] && [ ! -x /usr/local/bin/unifdef.real ]; then
-    mv /usr/local/bin/unifdef /usr/local/bin/unifdef.real
-    cat > /usr/local/bin/unifdef <<'WRAP'
-#!/bin/sh
-exec /usr/local/bin/unifdef.real "$@" \
-    -UMACH_KERNEL_PRIVATE -UBSD_KERNEL_PRIVATE -UIOKIT_KERNEL_PRIVATE \
-    -ULIBKERN_KERNEL_PRIVATE -ULIBSA_KERNEL_PRIVATE -UPEXPERT_KERNEL_PRIVATE \
-    -UXNU_KERNEL_PRIVATE -UEXCLAVEKIT -UEXCLAVECORE
-WRAP
-    chmod +x /usr/local/bin/unifdef
-    log "unifdef 已换成带私有块剥离参数的包装器"
-fi
-
-# TargetConditionals.h：公开 SDK 里没有，XNU 的 debug.h 需要它；参考树自带一份。
-# 注意 XNU_SDK_PATH 在 xnu-env.sh 里才定义（这里还没 source），所以要自己拼路径。
-TC_SRC="$HERE/xnu-deps/build/pthread/inc/TargetConditionals.h"
-for inc in "$HERE/xnu-deps/sdk/iPhoneOS16.5.xnu.sdk/usr/include" \
-           "$WORK/theos/sdks/iPhoneOS16.5.sdk/usr/include"; do
-    if [ -d "$inc" ] && [ -f "$TC_SRC" ]; then
-        cp -f "$TC_SRC" "$inc/TargetConditionals.h" 2>/dev/null && \
-            log "补 TargetConditionals.h -> $inc"
-    fi
-done
-
 log "setup.sh --stage2（导出头文件 + 静态库）"
 ( cd "$HERE" && bash xnu-deps/setup.sh --stage2 ) >>"$WORK/setup.log" 2>&1
 STAGE2_RC=$?
 if [ "$STAGE2_RC" != 0 ]; then
-    log "警告：stage2 退出码 $STAGE2_RC —— 仍继续编内核本体"
-    tail -15 "$WORK/setup.log"
-    HDR="$XNU_ROOT/BUILD/obj/EXPORT_HDRS/osfmk/kern/lock_rw.h"
-    [ -f "$HDR" ] && log "导出头文件: $(wc -l < "$HDR") 行，__lck_rw_other_extern $(grep -c __lck_rw_other_extern "$HDR") 次"
+    log "警告：stage2 退出码 $STAGE2_RC —— 仍继续做闸门检查"
+    grep -nE 'error:|fatal error' "$WORK/setup.log" | head -10
 else
     log "stage2 完成"
 fi
 
-# 导出头文件自己剥一遍 XNU_KERNEL_PRIVATE 族。
-# 上游 make 的 UNIFDEF 规则在这套环境里没生效（导出的是原样拷贝，1186 行），
-# 而内核代码会 -I 到 EXPORT_HDRS，于是 lock_rw.h/upsi.h 的私有块以"未定义类型"炸出来。
-# 参数取自 makedefs/MakeInc.def 的 XNU_PRIVATE_UNIFDEF（参考实现 xnu-deps/setup.sh 同源）。
-STRIP_FLAGS="-UMACH_KERNEL_PRIVATE -UBSD_KERNEL_PRIVATE -UIOKIT_KERNEL_PRIVATE -ULIBKERN_KERNEL_PRIVATE -ULIBSA_KERNEL_PRIVATE -UPEXPERT_KERNEL_PRIVATE -UXNU_KERNEL_PRIVATE -UEXCLAVEKIT -UEXCLAVECORE"
+# ---------------------------------------------------------------- 10 秒头部闸门
+# 历史上每个卡点都停在"导出头 / 宏值"这一层，而每次发现要花掉 4~15 分钟编译。
+# 这里在编译前用几十毫秒把三件事钉死，任何一条不成立就直接退出。
 EXPORT_DIR="$XNU_ROOT/BUILD/obj/EXPORT_HDRS"
-if [ -d "$EXPORT_DIR" ] && command -v unifdef >/dev/null 2>&1; then
-    n=0
-    while IFS= read -r -d '' f; do
-        unifdef $STRIP_FLAGS "$f" > "$f.strip" 2>/dev/null
-        rc=$?
-        if [ $rc -eq 0 ] || [ $rc -eq 1 ]; then mv "$f.strip" "$f"; n=$((n+1)); else rm -f "$f.strip"; fi
-    done < <(find "$EXPORT_DIR" -name '*.h' -print0)
-    log "已剥私有块的头文件：$n 个"
-    HDR="$EXPORT_DIR/osfmk/kern/lock_rw.h"
-    [ -f "$HDR" ] && log "核对 lock_rw.h: $(wc -l < "$HDR") 行，__lck_rw_other_extern $(grep -c __lck_rw_other_extern "$HDR") 次"
+gate_fail=0
+ok()  { printf '  [闸门 ✓] %s\n' "$*"; }
+bad() { printf '  [闸门 ✗] %s\n' "$*"; gate_fail=1; }
+
+# 1) 不允许任何「定义成 0」的 kernel-private 宏：值 0 会让 #if 与 #ifdef 打架
+if grep -rnE -- '-DXNU_KERNEL_PRIVATE=0' "$HERE/xnu-deps" >"$WORK/gate-macro0.txt" 2>&1; then
+    bad "xnu-deps 里还有 -DXNU_KERNEL_PRIVATE=0："
+    cat "$WORK/gate-macro0.txt"
 else
-    log "跳过导出头处理（目录或 unifdef 缺失）"
+    ok "没有 -DXNU_KERNEL_PRIVATE=0（用的是 -UXNU_KERNEL_PRIVATE）"
 fi
 
-log "xnu-build.sh（MACHINE=BCM2837 XNU_ARCH=$ARCH_STR）"
-KER=""
-for attempt in 1 2 3; do
-    # 构建过程中会重新生成导出头，所以每轮开头都再剥一次（见上：本环境里模板的 $(4) 为空）
-    if [ -d "$EXPORT_DIR" ] && command -v unifdef >/dev/null 2>&1; then
-        while IFS= read -r -d '' f; do
-            unifdef $STRIP_FLAGS "$f" > "$f.strip" 2>/dev/null
-            rc=$?
-            if [ $rc -eq 0 ] || [ $rc -eq 1 ]; then mv "$f.strip" "$f"; else rm -f "$f.strip"; fi
-        done < <(find "$EXPORT_DIR" -name '*.h' -print0)
-        HDR="$EXPORT_DIR/osfmk/kern/lock_rw.h"
-        [ -f "$HDR" ] && log "第 $attempt 轮：lock_rw.h $(wc -l < "$HDR") 行，__lck_rw_other_extern $(grep -c __lck_rw_other_extern "$HDR") 次"
+# 2) 导出头必须是源码的原样拷贝（EXPORT_HDRS 走 INSTALL 直拷，上游不剥）
+for f in osfmk/kern/debug.h osfmk/kern/lock_rw.h; do
+    if [ ! -f "$EXPORT_DIR/$f" ]; then
+        bad "缺 $EXPORT_DIR/$f（stage2 没导出成功？见 work/setup.log）"
+    elif cmp -s "$EXPORT_DIR/$f" "$XNU_ROOT/$f"; then
+        ok "导出头未被改写：$f（$(wc -l < "$EXPORT_DIR/$f") 行）"
+    else
+        bad "$f 与源码不一致（导出 $(wc -l < "$EXPORT_DIR/$f") 行 vs 源码 $(wc -l < "$XNU_ROOT/$f") 行）——被剥离/改写过"
     fi
-    ( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
-        bash xnu-build.sh -j"$NPROC" -k ) >"$WORK/xnubuild.log" 2>&1
-    rc=$?
-    log "第 $attempt 轮构建退出码 $rc"
-    KER=$(find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -type f -name 'mach.*' 2>/dev/null | grep -vE '\.(o|d|a)$' | head -3)
-    [ -n "$KER" ] && break
-    [ $rc -eq 0 ] && break
 done
+
+# 3) 用两组定义集预处理 lock_rw.h：宏和用到它的声明必须同生同死
+if [ -f "$EXPORT_DIR/osfmk/kern/lock_rw.h" ]; then
+    PROBE="$WORK/gate-lock_rw.h"
+    grep -v '^#include' "$EXPORT_DIR/osfmk/kern/lock_rw.h" > "$PROBE"
+    KERNEL_DEFS="-DXNU_KERNEL_PRIVATE -DMACH_KERNEL_PRIVATE -DKERNEL=1 -DKERNEL_PRIVATE=1 -DPRIVATE=1"
+    CLIENT_DEFS="-UXNU_KERNEL_PRIVATE -DKERNEL=1 -DKERNEL_PRIVATE=1 -DPRIVATE=1"
+    K_N=$(clang -E -P -nostdinc $KERNEL_DEFS -x c "$PROBE" 2>/dev/null | grep -c 'lck_rw_other_t')
+    C_N=$(clang -E -P -nostdinc $CLIENT_DEFS -x c "$PROBE" 2>/dev/null | grep -c 'lck_rw_other_t')
+    ok "lock_rw.h 预处理：内核定义集 $K_N 行、公开定义集 $C_N 行（期望 内核>0、公开=0）"
+    [ "$K_N" -gt 0 ] || bad "内核定义集下 lck_rw_other_t 一行都没有——宏被剥了"
+    [ "$C_N" -eq 0 ] || bad "公开定义集下还有 $C_N 行 lck_rw_other_t——又踩回 #if/#ifdef 打架"
+fi
+
+if [ "$gate_fail" != 0 ]; then
+    log "闸门未通过，不进入内核编译（省掉一轮 4 分钟）"
+    exit 1
+fi
+log "闸门通过，开始编译"
+
+log "xnu-build.sh（MACHINE=BCM2837 XNU_ARCH=$ARCH_STR，单轮）"
+( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
+    bash xnu-build.sh -j"$NPROC" -k ) >"$WORK/xnubuild.log" 2>&1
+rc=$?
+log "构建退出码 $rc"
+KER=$(find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -type f -name 'mach.*' 2>/dev/null | grep -vE '\.(o|d|a)$' | head -3)
 
 [ -n "$KER" ] && ls -l $KER 2>/dev/null | head -3
 if [ -n "$KER" ]; then
-    cp $(echo "$KER" | head -1) "$HERE/mach.ishtar"
+    cp "$(echo "$KER" | head -1)" "$HERE/mach.ishtar"
+    cp "$(echo "$KER" | head -1)" "$HERE/../mach.ishtar"   # workflow 的 artifact 路径在仓库根
     log "内核：$HERE/mach.ishtar（$(stat -c %s "$HERE/mach.ishtar") 字节）"
     exit 0
 fi
 HDR="$EXPORT_DIR/osfmk/kern/lock_rw.h"
-[ -f "$HDR" ] && { log "最终 lock_rw.h: $(wc -l < "$HDR") 行"; grep -n "XNU_KERNEL_PRIVATE" "$HDR" | head -3; }
+[ -f "$HDR" ] && log "最终 lock_rw.h: $(wc -l < "$HDR") 行（源码 $(wc -l < "$XNU_ROOT/osfmk/kern/lock_rw.h") 行）"
 log "没有产出内核，xnubuild.log 末尾："
 tail -60 "$WORK/xnubuild.log"
 
-# ---- 收集给外部诊断用的材料（生成后的 Makefile、实际命令、导出头样本）----------
+# ---- 收集诊断材料（第一条报错就够下结论，不用再拖 3 MB 日志）------------
 DBG="$WORK/debug"; mkdir -p "$DBG"
 log "收集诊断材料到 $DBG"
-# 1) 生成后的 Makefile（挑 osfmk 的）
+# 1) 报错行 + 文件头部（文件头有 make 的起点，便于对齐阶段）
+{ grep -nE 'error:|fatal error|Error 1' "$WORK/xnubuild.log" 2>/dev/null | head -40
+  echo '--- xnubuild.log 前 120 行 ---'
+  head -120 "$WORK/xnubuild.log" 2>/dev/null; } > "$DBG/first-errors.txt"
+# 2) 生成后的 Makefile（能看见组件级 CFLAGS 里的 -DMACH_KERNEL_PRIVATE）
 find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -type d -name 'DEVELOPMENT' 2>/dev/null | head -5 | while read d; do
     [ -f "$d/Makefile" ] && cp "$d/Makefile" "$DBG/generated-$(basename "$(dirname "$d")")-Makefile" 2>/dev/null
 done
-# 2) make 实际会执行的命令（干跑）
-( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
-    bash -c 'exec make -n exporthdrs REDWOOD_OBJECTS= SDKROOT=iphoneos ARCH_CONFIGS=ARM64 \
-      MACHINE_CONFIGS=BCM2837 KERNEL_CONFIGS=DEVELOPMENT BUILD_WERROR=0 BUILD_LTO=0 \
-      DO_CTFMERGE=0 BUILD_DSYM=0 CC=xnu-clang CXX=xnu-clang++ 2>&1' ) \
-  | grep -iE "unifdef|EXPORT_HDRS" | head -40 > "$DBG/make-n-unifdef.txt" 2>/dev/null
-# 3) 导出头样本（前 80 行 + 行数）
-H="$XNU_ROOT/BUILD/obj/EXPORT_HDRS/osfmk/kern/lock_rw.h"
-[ -f "$H" ] && { wc -l "$H" > "$DBG/exported-lock_rw-head.txt"; head -80 "$H" >> "$DBG/exported-lock_rw-head.txt"; }
-# 4) 工具与版本
-{ command -v unifdef; unifdef -h 2>&1 | head -3; ls -l "$HERE/xnu-deps/host/bin" 2>/dev/null; \
-  clang --version 2>&1 | head -2; } > "$DBG/tools.txt" 2>&1
+# 3) 真正决定成败的两处标志
+{ echo '=== xnu-deps/setup.sh 的 firehose 定义集 ==='
+  grep -n 'XNU_KERNEL_PRIVATE' "$HERE/xnu-deps/setup.sh"
+  echo '=== MakeInc.def 的内核 DEFINES ==='
+  sed -n '155,165p' "$XNU_ROOT/makedefs/MakeInc.def"; } > "$DBG/flags.txt" 2>&1
+# 4) 导出头样本
+[ -f "$HDR" ] && { wc -l "$HDR" > "$DBG/exported-lock_rw-head.txt"; head -80 "$HDR" >> "$DBG/exported-lock_rw-head.txt"; }
+# 5) 工具与版本
+{ command -v unifdef; ls -l "$HERE/xnu-deps/host/bin" 2>/dev/null; clang --version 2>&1 | head -2; } > "$DBG/tools.txt" 2>&1
 ls -l "$DBG"
 exit 1
