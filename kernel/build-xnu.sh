@@ -53,6 +53,43 @@ if [ ! -d "$XNU_ROOT" ]; then
     git -C "$XNU_ROOT" apply --whitespace=nowarn "$HERE/xnu-12377.121.6-dada.patch" \
         || { log "dada 补丁打不上"; exit 1; }
 fi
+# ---------------------------------------------------------------- 4b. 修 XNU 的导出头规则
+# MakeInc.rule 的 INSTALLHDRS 模板用 $(UNIFDEF) $(4) 生成导出头；在本环境里 $(4)
+# （SPINCFRAME_UNIFDEF 等）展开为空，空参 unifdef 等于原样拷贝，于是导出头保留了
+# XNU_KERNEL_PRIVATE 私有块，内核代码 -I 过去就报未定义类型。
+# 修法：把私有块剥离参数**字面量**写进模板（不依赖变量展开时机），并把 UNIFDEF 固定成绝对路径。
+python3 - "$XNU_ROOT" <<'PATCH'
+import sys, os
+root = sys.argv[1]
+FLAGS = ("-UMACH_KERNEL_PRIVATE -UBSD_KERNEL_PRIVATE -UIOKIT_KERNEL_PRIVATE "
+         "-ULIBKERN_KERNEL_PRIVATE -ULIBSA_KERNEL_PRIVATE -UPEXPERT_KERNEL_PRIVATE "
+         "-UXNU_KERNEL_PRIVATE -UEXCLAVEKIT -UEXCLAVECORE")
+
+# 1) 模板里强制带剥离参数
+p = os.path.join(root, 'makedefs/MakeInc.rule')
+s = open(p).read()
+old = "$$(_v)$$(UNIFDEF) $(4) $$< > ./$(3)/$$*.unifdef.$$$$$$$$;"
+new = "$$(_v)$$(UNIFDEF) $(4) " + FLAGS + " $$< > ./$(3)/$$*.unifdef.$$$$$$$$;"
+if old in s and FLAGS not in s:
+    s = s.replace(old, new, 1)
+    open(p, 'w').write(s)
+    print('MakeInc.rule: INSTALLHDRS 模板已加剥离参数')
+else:
+    print('MakeInc.rule: 已打过或锚点不匹配')
+
+# 2) UNIFDEF 固定为绝对路径，不再靠 $(shell $(XCRUN) ...) 求值
+p = os.path.join(root, 'makedefs/MakeInc.cmd')
+s = open(p).read()
+old = "	export UNIFDEF := $(shell $(XCRUN) -sdk $(SDKROOT) -find unifdef)"
+new = "	export UNIFDEF := /usr/local/bin/unifdef"
+if old in s:
+    s = s.replace(old, new, 1)
+    open(p, 'w').write(s)
+    print('MakeInc.cmd: UNIFDEF 固定为 /usr/local/bin/unifdef')
+else:
+    print('MakeInc.cmd: 已打过或锚点不匹配')
+PATCH
+
 export XNU_SRC="$XNU_ROOT"
 export DARWIN_REDWOOD="$HERE"
 
