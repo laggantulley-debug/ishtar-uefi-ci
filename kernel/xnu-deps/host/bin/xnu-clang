@@ -10,6 +10,9 @@ for a in "$@"; do
   case "$a" in
     -enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang) ;;
     -fapple-kext-vtable-verify|-Wno-vla-cxx-extension) ;;
+    # Arm SME 相关开关只有较新的 Apple clang 认识；Ubuntu 24.04 的 clang-18 会报
+    # "unknown argument: '-mno-implicit-sme'"（MakeInc.def:473 给 arm64 内核加的）。
+    -mno-implicit-sme|-mimplicit-sme|-msme|-mno-sme) ;;
     -Werror|-Werror=*|-Weverything|-pedantic-errors) ;;
     *) args+=("$a");;
   esac
