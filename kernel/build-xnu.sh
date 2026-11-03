@@ -178,6 +178,15 @@ log "闸门通过，开始编译"
 
 log "xnu-build.sh（MACHINE=BCM2837 XNU_ARCH=$ARCH_STR，单轮）"
 ( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
+# ---------------------------------------------------------------- 补 TargetConditionals.h
+# 实测：放进两个 SDK 的 usr/include 后 clang 仍找不到（构建的 include 根是
+# BUILD/obj/EXPORT_HDRS，不是 SDK）。所以直接放进 EXPORT_HDRS 根目录。
+TC_SRC="$HERE/xnu-deps/build/pthread/inc/TargetConditionals.h"
+if [ -f "$TC_SRC" ] && [ -d "$EXPORT_DIR" ]; then
+    cp -f "$TC_SRC" "$EXPORT_DIR/TargetConditionals.h" 2>/dev/null && \
+        log "补 TargetConditionals.h -> $EXPORT_DIR/"
+fi
+
     bash xnu-build.sh -j"$NPROC" -k ) >"$WORK/xnubuild.log" 2>&1
 rc=$?
 log "构建退出码 $rc"
