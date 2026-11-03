@@ -1,0 +1,58 @@
+name: build-ishtar-kernel
+
+# Builds the HakiOS kernel for ishtar: Apple XNU 12377.121.6 + xnu-12377.121.6-dada.patch.
+# Runs where cctools and the iOS SDK can actually be built (x86_64 Linux), because the
+# upstream recipe assumes theos, whose Linux toolchain is x86_64 only.
+#
+# Artifact: mach.ishtar (mach.development.bcm2837), the kernel that goes into the XNUP payload.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'kernel/**'
+      - '.github/workflows/build-xnu-ishtar.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git curl ca-certificates tar xz-utils build-essential clang lld llvm \
+            flex bison m4 perl python3 python3-venv autoconf automake libtool \
+            libssl-dev uuid-dev zlib1g-dev libelf-dev
+          clang --version | head -1
+
+      - name: Build kernel
+        run: |
+          chmod +x kernel/build-xnu.sh
+          bash kernel/build-xnu.sh arm64
+
+      - name: Report
+        if: always()
+        run: |
+          ls -l mach.ishtar 2>/dev/null || true
+          echo "--- setup.log tail ---"; tail -20 kernel/work/setup.log 2>/dev/null || true
+          echo "--- xnubuild.log tail ---"; tail -40 kernel/work/xnubuild.log 2>/dev/null || true
+
+      - name: Upload kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: mach-ishtar-kernel
+          path: mach.ishtar
+          if-no-files-found: warn
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-build-logs
+          path: |
+            kernel/work/*.log
+          if-no-files-found: warn
