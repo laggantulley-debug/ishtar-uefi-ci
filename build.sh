@@ -31,6 +31,11 @@ mkdir -p "$MU/Platforms/Xiaomi" "$MU/Binaries/ishtar"
 cp -r "$ROOT/platform/ishtarPkg" "$MU/Platforms/Xiaomi/"
 cp -r "$ROOT/binaries/ishtar/." "$MU/Binaries/ishtar/"
 cp "$ROOT/resources/ishtar.toml" "$MU/Resources/Configs/ishtar.toml"
+# The post-build step wants the device's own device tree next to the image
+# (Resources/DTBs/<device>.dtb). This is the live FDT read off the phone
+# (/sys/firmware/fdt, 902,020 B), not a hand-made one.
+mkdir -p "$MU/Resources/DTBs"
+cp "$ROOT/dtb/ishtar.dtb" "$MU/Resources/DTBs/ishtar.dtb"
 
 echo "== 4. Binaries is a plain directory here, not the Device-Binaries submodule =="
 # This port uses the drivers extracted from *this unit's* uefi.img; the public set differs in
