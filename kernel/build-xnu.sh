@@ -125,6 +125,14 @@ WRAP
     log "unifdef 已换成带私有块剥离参数的包装器"
 fi
 
+# TargetConditionals.h：公开 SDK 里没有，XNU 的 debug.h 需要它；参考树自带一份
+for inc in "$XNU_SDK_PATH/usr/include" "$WORK/theos/sdks/iPhoneOS16.5.sdk/usr/include"; do
+    if [ -d "$inc" ] && [ ! -f "$inc/TargetConditionals.h" ]; then
+        cp "$HERE/xnu-deps/build/pthread/inc/TargetConditionals.h" "$inc/" 2>/dev/null && \
+            log "补 TargetConditionals.h -> $inc"
+    fi
+done
+
 log "setup.sh --stage2（导出头文件 + 静态库）"
 ( cd "$HERE" && bash xnu-deps/setup.sh --stage2 ) >>"$WORK/setup.log" 2>&1
 STAGE2_RC=$?
@@ -158,17 +166,35 @@ else
 fi
 
 log "xnu-build.sh（MACHINE=BCM2837 XNU_ARCH=$ARCH_STR）"
-( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
-    bash xnu-build.sh -j"$NPROC" -k ) >"$WORK/xnubuild.log" 2>&1
-log "内核构建退出码 $?"
+KER=""
+for attempt in 1 2 3; do
+    # 构建过程中会重新生成导出头，所以每轮开头都再剥一次（见上：本环境里模板的 $(4) 为空）
+    if [ -d "$EXPORT_DIR" ] && command -v unifdef >/dev/null 2>&1; then
+        while IFS= read -r -d '' f; do
+            unifdef $STRIP_FLAGS "$f" > "$f.strip" 2>/dev/null
+            rc=$?
+            if [ $rc -eq 0 ] || [ $rc -eq 1 ]; then mv "$f.strip" "$f"; else rm -f "$f.strip"; fi
+        done < <(find "$EXPORT_DIR" -name '*.h' -print0)
+        HDR="$EXPORT_DIR/osfmk/kern/lock_rw.h"
+        [ -f "$HDR" ] && log "第 $attempt 轮：lock_rw.h $(wc -l < "$HDR") 行，__lck_rw_other_extern $(grep -c __lck_rw_other_extern "$HDR") 次"
+    fi
+    ( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
+        bash xnu-build.sh -j"$NPROC" -k ) >"$WORK/xnubuild.log" 2>&1
+    rc=$?
+    log "第 $attempt 轮构建退出码 $rc"
+    KER=$(find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -type f -name 'mach.*' 2>/dev/null | grep -vE '\.(o|d|a)$' | head -3)
+    [ -n "$KER" ] && break
+    [ $rc -eq 0 ] && break
+done
 
-KER=$(find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -type f -name 'mach.*' 2>/dev/null | grep -vE '\.(o|d|a)$' | head -3)
 [ -n "$KER" ] && ls -l $KER 2>/dev/null | head -3
 if [ -n "$KER" ]; then
     cp $(echo "$KER" | head -1) "$HERE/mach.ishtar"
     log "内核：$HERE/mach.ishtar（$(stat -c %s "$HERE/mach.ishtar") 字节）"
     exit 0
 fi
+HDR="$EXPORT_DIR/osfmk/kern/lock_rw.h"
+[ -f "$HDR" ] && { log "最终 lock_rw.h: $(wc -l < "$HDR") 行"; grep -n "XNU_KERNEL_PRIVATE" "$HDR" | head -3; }
 log "没有产出内核，xnubuild.log 末尾："
 tail -60 "$WORK/xnubuild.log"
 exit 1
