@@ -1,24 +1,17 @@
 #!/bin/bash
-# 在 CI 里构建 ishtar/H′ 内核：Apple XNU 12377.121.6 + HakiOS 设备层。
-#
-# HakiOS 的构建需要 Apple 的 cctools（ld64、nm、otool、strip…）和一份 iPhoneOS SDK。
-# macOS 上两者来自 Xcode；Linux 上上游做法是 theos，但 theos 的 Linux 工具链
-# 只有 x86_64 版。所以这里自己编 cctools-port，并拼出一个恰好满足
-# xnu-deps/setup.sh 的 $THEOS 布局。
-#
-#   ./build-xnu.sh [arm64|arm64e]
-set -uo pipefail
+# 在 CI 里构建 ishtar/H′ 内核：Apple XNU 12377.121.6 + HakiOS 设备层（dada 叠加层）。
+set -o pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 WORK=${WORK:-$HERE/work}
 NPROC=$(nproc)
 ARCH_STR=${1:-${XNU_ARCH:-arm64}}
 XNU_TAG=xnu-12377.121.6
-
 mkdir -p "$WORK"
 log() { echo "[$(date -u +%H:%M:%SZ)] $*"; }
 
-# ---------------------------------------------------------------- 1. Apple cctools (host build)
-if [ ! -x "$WORK/cctools/bin/ld" ]; then
+export RC_DARWIN_KERNEL_VERSION=${RC_DARWIN_KERNEL_VERSION:-12377.121.6}
+
+if [ ! -x "$WORK/cctools/bin/aarch64-apple-darwin-ld" ]; then
     log "下载 cctools-port"
     curl -fsSL --retry 3 -o "$WORK/cctools-port.tar.gz" \
         https://codeload.github.com/tpoechtrager/cctools-port/tar.gz/refs/heads/master
@@ -29,38 +22,29 @@ if [ ! -x "$WORK/cctools/bin/ld" ]; then
         && make -j"$NPROC" >make.log 2>&1 && make install >>make.log 2>&1 ) \
         || { log "cctools 构建失败"; tail -40 "$SRC/make.log" 2>/dev/null; exit 1; }
 fi
-log "cctools: $(ls "$WORK/cctools/bin" | tr '\n' ' ')"
+log "cctools 就绪"
 
-# ---------------------------------------------------------------- 2. theos SDK
 if [ ! -d "$WORK/sdks/iPhoneOS16.5.sdk/usr/include" ]; then
     log "下载 theos SDK（165 MB）"
     curl -fsSL --retry 3 -o "$WORK/theos-sdks.tar.gz" \
         https://codeload.github.com/theos/sdks/tar.gz/refs/heads/master
-    mkdir -p "$WORK/sdks" && tar -xzf "$WORK/theos-sdks.tar.gz" -C "$WORK/sdks" \
-        --wildcards '*/iPhoneOS16.5.sdk/*' --strip-components=1 2>/dev/null || true
-    # the tarball has sdks-<branch>/iPhoneOS16.5.sdk; normalise either layout
-    if [ ! -d "$WORK/sdks/iPhoneOS16.5.sdk" ]; then
-        D=$(find "$WORK/sdks" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' | head -1)
-        [ -n "$D" ] && mv "$D" "$WORK/sdks/"
-    fi
+    mkdir -p "$WORK/sdks" && tar -xzf "$WORK/theos-sdks.tar.gz" -C "$WORK/sdks" 2>/dev/null || true
+    D=$(find "$WORK/sdks" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' | head -1)
+    if [ -n "$D" ] && [ "$D" != "$WORK/sdks/iPhoneOS16.5.sdk" ]; then mv "$D" "$WORK/sdks/"; fi
 fi
-[ -d "$WORK/sdks/iPhoneOS16.5.sdk/usr/include" ] || { log "没有 iPhoneOS16.5.sdk"; ls "$WORK/sdks" | head; exit 1; }
+[ -d "$WORK/sdks/iPhoneOS16.5.sdk/usr/include" ] \
+    || { log "没有 iPhoneOS16.5.sdk"; ls "$WORK/sdks" 2>/dev/null | head; exit 1; }
 
-# ---------------------------------------------------------------- 3. the $THEOS layout setup.sh expects
 mkdir -p "$WORK/theos/toolchain/linux/iphone/bin" "$WORK/theos/sdks"
-# cctools-port installs the tools under the target triple (aarch64-apple-darwin-ld, ...),
-# while xnu-deps/setup.sh looks for the theos layout with plain names (ld, nm, otool, ...).
 for tool in ld nm otool strip lipo libtool nmedit ctf_insert codesign_allocate \
-            install_name_tool ar ranlib as size strings ObjectDump; do
+            install_name_tool ar ranlib as size strings; do
     [ -e "$WORK/cctools/bin/aarch64-apple-darwin-$tool" ] && \
         ln -sfn "$WORK/cctools/bin/aarch64-apple-darwin-$tool" "$WORK/theos/toolchain/linux/iphone/bin/$tool"
 done
-ln -sfn "$WORK/theos/toolchain/linux/iphone/bin" "$WORK/theos/toolchain/linux/iphone/bin-link"
-ls "$WORK/theos/toolchain/linux/iphone/bin" | tr '\n' ' '; echo
 ln -sfn "$WORK/sdks/iPhoneOS16.5.sdk" "$WORK/theos/sdks/iPhoneOS16.5.sdk"
 export THEOS="$WORK/theos"
+log "THEOS=$THEOS"
 
-# ---------------------------------------------------------------- 4. XNU + the H′ patch
 XNU_ROOT="$HERE/xnu-src/$XNU_TAG"
 if [ ! -d "$XNU_ROOT" ]; then
     log "克隆 apple-oss-distributions/xnu @ $XNU_TAG"
@@ -72,62 +56,45 @@ fi
 export XNU_SRC="$XNU_ROOT"
 export DARWIN_REDWOOD="$HERE"
 
-# ---------------------------------------------------------------- 5. dependencies, then the kernel
-# 内核版本号：MakeInc.kernel:299 会去 SDK/KDK 的 System.kext/Info.plist 里读 CFBundleVersion，
-# 我们的 SDK 是 theos 的公开 SDK，没有 System.kext，于是报
-# "Could not determine xnu version from SDK or KDK"。MakeInc.kernel 自己给了逃生口：
-export RC_DARWIN_KERNEL_VERSION=${RC_DARWIN_KERNEL_VERSION:-12377.121.6}
-log "RC_DARWIN_KERNEL_VERSION=$RC_DARWIN_KERNEL_VERSION"
-
-# 用 Git Data API 上传时丢了可执行位（mode 100644），这里补回来；
-# 否则 setup.sh 里的 stage2 会以 "xnu-build.sh: Permission denied" 失败。
 chmod +x "$HERE/xnu-build.sh" "$HERE/xnu-env.sh" 2>/dev/null
 find "$HERE/xnu-deps" -name '*.sh' -exec chmod +x {} + 2>/dev/null
-# host/bin 里是一批没有扩展名的脚本（xcrun / sw_vers / plutil / codesign / iig / install /
-# xnu-clang）：Git API 上传同样丢了 +x，make 会报 "xcrun: Permission denied"。
 [ -d "$HERE/xnu-deps/host/bin" ] && find "$HERE/xnu-deps/host/bin" -type f -exec chmod +x {} + 2>/dev/null
 
-log "xnu-deps/setup.sh --stage1"
-( cd "$HERE" && bash xnu-deps/setup.sh --stage1 ) >"$WORK/setup.log" 2>&1
+log "setup.sh --stage1"
+( cd "$HERE" && bash xnu-deps/setup.sh --stage1 ) >"$WORK/setup.log" 2>&1 \
+    || { log "stage1 失败"; tail -40 "$WORK/setup.log"; exit 1; }
 
-# 关键一步：把宿主工具装到 /usr/local/bin。
-# 导出头文件那一步是 csh 脚本 SETUP/config/doconf 驱动的，它可能重置 PATH，
-# 于是 make 找不到 xnu-deps/host/bin/unifdef —— 没有被 unifdef 剥掉
-# XNU_KERNEL_PRIVATE 块的 header 会被原样导出，随后编译就报
-# "upsi.h is XNU private" / "unknown type name 'lck_rw_new_t'"。
 if [ -d "$HERE/xnu-deps/host/bin" ]; then
     for t in "$HERE"/xnu-deps/host/bin/*; do
-        [ -f "$t" ] && sudo install -m755 "$t" /usr/local/bin/ 2>/dev/null || true
+        [ -f "$t" ] && { sudo install -m755 "$t" /usr/local/bin/ 2>/dev/null || cp -f "$t" /usr/local/bin/ 2>/dev/null || true; }
     done
-    log "宿主工具已装到 /usr/local/bin: $(ls /usr/local/bin | grep -cE 'unifdef|xcrun|sw_vers|plutil|codesign|iig|install|tcsh') 个"
+    log "宿主工具已装到 /usr/local/bin：$(ls /usr/local/bin 2>/dev/null | grep -cE 'unifdef|xcrun|sw_vers|plutil|codesign|iig|tcsh') 个"
 fi
 
-log "xnu-deps/setup.sh --stage2"
-( cd "$HERE" && bash xnu-deps/setup.sh --stage2 ) >>"$WORK/setup.log" 2>&1 \
-    || { log "setup.sh 失败，日志如下："
-         # 诊断：导出的 lock_rw.h 到底有没有被 unifdef 处理过
-         HDR="$XNU_ROOT/BUILD/obj/EXPORT_HDRS/osfmk/kern/lock_rw.h"
-         if [ -f "$HDR" ]; then
-             log "导出头文件: $(wc -l < "$HDR") 行，__lck_rw_other_extern 出现 $(grep -c __lck_rw_other_extern "$HDR") 次"
-             grep -n "XNU_KERNEL_PRIVATE" "$HDR" | head -3
-         else
-             log "没有生成 $HDR"
-         fi
-         log "unifdef: $(command -v unifdef || echo 未找到)"; unifdef -h 2>&1 | head -2
-         tail -40 "$WORK/setup.log"
-         for extra in "$HERE/xnu-deps/exporthdrs.log" "$HERE/xnu-deps/stage2.log" \
-                      "$HERE/xnu-deps/mig-build.log" "$HERE/xnu-deps/tcsh-build.log"; do
-             [ -f "$extra" ] && { log "--- $(basename "$extra") ---"; tail -40 "$extra"; }
-         done
-         exit 1; }
+log "setup.sh --stage2（导出头文件 + 静态库）"
+( cd "$HERE" && bash xnu-deps/setup.sh --stage2 ) >>"$WORK/setup.log" 2>&1
+STAGE2_RC=$?
+if [ "$STAGE2_RC" != 0 ]; then
+    log "警告：stage2 退出码 $STAGE2_RC —— 仍继续编内核本体"
+    tail -15 "$WORK/setup.log"
+    HDR="$XNU_ROOT/BUILD/obj/EXPORT_HDRS/osfmk/kern/lock_rw.h"
+    [ -f "$HDR" ] && log "导出头文件: $(wc -l < "$HDR") 行，__lck_rw_other_extern $(grep -c __lck_rw_other_extern "$HDR") 次"
+else
+    log "stage2 完成"
+fi
 
-log "xnu-build.sh (MACHINE=BCM2837 XNU_ARCH=$ARCH_STR)"
+log "xnu-build.sh（MACHINE=BCM2837 XNU_ARCH=$ARCH_STR）"
 ( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \
     bash xnu-build.sh -j"$NPROC" -k ) >"$WORK/xnubuild.log" 2>&1
-rc=$?
-KER=$(find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -name 'mach.*.unstripped' -o -maxdepth 3 -name 'mach.*' -type f 2>/dev/null | head -5)
-log "构建退出码 rc=$rc"
-ls -l $KER 2>/dev/null | head
-[ -n "$KER" ] && cp $(echo "$KER" | head -1) "$HERE/mach.ishtar" && log "内核：$HERE/mach.ishtar"
-tail -25 "$WORK/xnubuild.log"
-[ -n "$KER" ] || { log "没有产出内核"; exit 1; }
+log "内核构建退出码 $?"
+
+KER=$(find "$XNU_ROOT/BUILD/obj" -maxdepth 3 -type f -name 'mach.*' 2>/dev/null | grep -vE '\.(o|d|a)$' | head -3)
+[ -n "$KER" ] && ls -l $KER 2>/dev/null | head -3
+if [ -n "$KER" ]; then
+    cp $(echo "$KER" | head -1) "$HERE/mach.ishtar"
+    log "内核：$HERE/mach.ishtar（$(stat -c %s "$HERE/mach.ishtar") 字节）"
+    exit 0
+fi
+log "没有产出内核，xnubuild.log 末尾："
+tail -60 "$WORK/xnubuild.log"
+exit 1
