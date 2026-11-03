@@ -88,6 +88,18 @@ def methods(body):
     return out
 
 
+def includes(text):
+    out = []
+    for l in text.splitlines():
+        if not re.match(r'\s*#\s*include\s+[<"]', l):
+            continue
+        # 跳过 #if !__IIG 里的“自包含”（真 iig 会预定义 __IIG 把这段掐掉）
+        if '<IOKit/' in l:
+            continue
+        out.append(l.strip())
+    return out
+
+
 def constants(text):
     """Top-level #define and enum members (class bodies excluded)."""
     seen = []
@@ -124,6 +136,7 @@ def main(argv):
 
     body = class_body(text, name)
     consts = constants(text)
+    incs = includes(text)
 
     # ---- constants the header must carry ------------------------------------------------
     existing = ''
@@ -138,6 +151,9 @@ def main(argv):
                   '#ifndef __GENIIG_%s_H' % name, '#define __GENIIG_%s_H' % name, '']
     elif missing:
         lines += ['', '/* constants from %s.iig that the copied SDK header lacks */' % name]
+
+    if not append_only and incs:
+        lines += ['/* 依赖：.iig 自己带的 include（生成的头必须自带，否则类型不可见） */'] + incs + ['']
 
     for n, v in missing:
         if re.fullmatch(r'-?\d+[uUlL]*|0[xX][0-9a-fA-F]+[uUlL]*', v.replace('(', '').replace(')', '')):

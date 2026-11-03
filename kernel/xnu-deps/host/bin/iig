@@ -26,6 +26,19 @@ if [ -x "$REAL_IIG" ] && "$REAL_IIG" "${ARGS[@]}" >/dev/null 2>&1 && [ -s "$hdr"
   exit 0
 fi
 
+# 1b. 这几类在 iOS 26 加了内核方法（Panic / SetPowerOverride / CreatePMAssertion /
+# ReleasePMAssertion / IOExtensiblePaniclog 全套），macOS 13.3 SDK 的预生成头没有这些
+# _Impl 声明，而内核 .cpp 里有定义 → 必须从 .iig 自己生成，不能复用旧头。
+GEN_ALWAYS=" IOService IOUserServer IOExtensiblePaniclog TestDextRematch "
+if [ "${GEN_ALWAYS#* $name }" != "$GEN_ALWAYS" ]; then
+  echo "iig shim: $name 有 iOS 26 新增内核方法，从 $def 生成" >&2
+  if python3 "$XNUDEPS/gen-iig.py" --def "$def" --header "$hdr" --impl "$impl"; then
+    [ -s "$impl" ] || echo "/* $name: generated, kernel side is hand written */" > "$impl"
+    exit 0
+  fi
+  echo "iig shim: 生成失败，退回旧头/空桩" >&2
+fi
+
 # 2. Fallback: a pre-generated header.
 src="$(find "$SDKH" -name "$name.h" -path '*DriverKit*' | head -1)"
 [ -z "$src" ] && src="$(find "$SDKH" -name "$name.h" | xargs grep -l 'iig(DriverKit' 2>/dev/null | head -1)"
