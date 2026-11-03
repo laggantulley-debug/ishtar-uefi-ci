@@ -73,6 +73,11 @@ export XNU_SRC="$XNU_ROOT"
 export DARWIN_REDWOOD="$HERE"
 
 # ---------------------------------------------------------------- 5. dependencies, then the kernel
+# 用 Git Data API 上传时丢了可执行位（mode 100644），这里补回来；
+# 否则 setup.sh 里的 stage2 会以 "xnu-build.sh: Permission denied" 失败。
+chmod +x "$HERE/xnu-build.sh" "$HERE/xnu-env.sh" 2>/dev/null
+find "$HERE/xnu-deps" -name '*.sh' -exec chmod +x {} + 2>/dev/null
+
 log "xnu-deps/setup.sh"
 ( cd "$HERE" && bash xnu-deps/setup.sh ) >"$WORK/setup.log" 2>&1 \
     || { log "setup.sh 失败，日志如下："; tail -40 "$WORK/setup.log"
