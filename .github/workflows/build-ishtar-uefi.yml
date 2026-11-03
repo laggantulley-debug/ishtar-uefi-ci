@@ -42,9 +42,11 @@ jobs:
           # the two hooks must be in the tree
           grep -q "_PayloadLoop" Mu-Silicium/BootShim/BootShim.S
           grep -q "XnuLoader.h" Mu-Silicium/Silicon/Silicium/SiliciumPkg/Library/BootManagerLib/BootManager.c
-          # the R3 loader must not be in the platform
-          ! grep -q "UniXNUPkg" Mu-Silicium/Platforms/Xiaomi/ishtarPkg/ishtar.dsc
-          ! grep -q "DarwinBootPkg" Mu-Silicium/Platforms/Xiaomi/ishtarPkg/ishtar.dsc
+          # the R3 loader must not be *active* in the platform (comments may name it:
+          # the .dsc documents what was removed and why)
+          grep -vE '^[[:space:]]*#' Mu-Silicium/Platforms/Xiaomi/ishtarPkg/ishtar.dsc > /tmp/ishtar.dsc.live
+          ! grep -q "UniXNUPkg" /tmp/ishtar.dsc.live
+          ! grep -q "DarwinBootPkg" /tmp/ishtar.dsc.live
 
       - uses: actions/upload-artifact@v4
         with:
