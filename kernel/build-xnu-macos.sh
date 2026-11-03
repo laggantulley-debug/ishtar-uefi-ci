@@ -47,6 +47,23 @@ chmod +x "$HERE/xnu-build.sh" "$HERE/xnu-env.sh" 2>/dev/null
 find "$HERE/xnu-deps" -name '*.sh' -exec chmod +x {} + 2>/dev/null
 [ -d "$HERE/xnu-deps/host/bin" ] && find "$HERE/xnu-deps/host/bin" -type f -exec chmod +x {} + 2>/dev/null
 
+# ---------------------------------------------------------------- 2b. unifdef（macOS 没有）
+# 参考实现的 macOS 分支是 `link /usr/bin/unifdef host/bin/unifdef`，但 macOS 自 10.15
+# 起就不带这个命令。缺了它，MakeInc.cmd 的 $(shell $(XCRUN) -find unifdef) 得到空值，
+# 导出头文件就成了原样拷贝，随后报 lock_rw.h 私有类型未定义。
+if [ ! -x "$HERE/xnu-deps/host/bin/unifdef" ] || ! "$HERE/xnu-deps/host/bin/unifdef" -h >/dev/null 2>&1; then
+    log "编译 unifdef（macOS 未自带）"
+    mkdir -p "$WORK/unifdef" "$HERE/xnu-deps/host/bin"
+    curl -fsSL --retry 3 -o "$WORK/unifdef.tar.gz" \
+        https://codeload.github.com/fanf2/unifdef/tar.gz/refs/heads/master
+    tar -xzf "$WORK/unifdef.tar.gz" -C "$WORK/unifdef" --strip-components=1
+    printf '"@(#) $Version: 2.12 $\\n"\n' > "$WORK/unifdef/version.h"
+    ( cd "$WORK/unifdef" && cc -std=gnu11 -O2 -w -o "$HERE/xnu-deps/host/bin/unifdef" unifdef.c ) \
+        || { log "unifdef 编译失败"; exit 1; }
+    chmod +x "$HERE/xnu-deps/host/bin/unifdef"
+fi
+log "unifdef: $("$HERE/xnu-deps/host/bin/unifdef" -h 2>&1 | head -1)"
+
 # ---------------------------------------------------------------- 3. 依赖
 log "setup.sh --stage1（macOS：cctools/mig 来自 Xcode）"
 ( cd "$HERE" && bash xnu-deps/setup.sh --stage1 ) >"$WORK/setup.log" 2>&1 \
