@@ -77,6 +77,9 @@ export DARWIN_REDWOOD="$HERE"
 # 否则 setup.sh 里的 stage2 会以 "xnu-build.sh: Permission denied" 失败。
 chmod +x "$HERE/xnu-build.sh" "$HERE/xnu-env.sh" 2>/dev/null
 find "$HERE/xnu-deps" -name '*.sh' -exec chmod +x {} + 2>/dev/null
+# host/bin 里是一批没有扩展名的脚本（xcrun / sw_vers / plutil / codesign / iig / install /
+# xnu-clang）：Git API 上传同样丢了 +x，make 会报 "xcrun: Permission denied"。
+[ -d "$HERE/xnu-deps/host/bin" ] && find "$HERE/xnu-deps/host/bin" -type f -exec chmod +x {} + 2>/dev/null
 
 log "xnu-deps/setup.sh"
 ( cd "$HERE" && bash xnu-deps/setup.sh ) >"$WORK/setup.log" 2>&1 \
