@@ -1,0 +1,60 @@
+name: build-ishtar-kernel-macos
+
+# 方案 B：在 macOS runner 上用 Xcode 的 clang/cctools/mig 构建 H′ 内核。
+#
+# 为什么需要它：Linux 那条路在 XNU 的导出头文件（EXPORT_HDRS）上撞不过去——
+# 上游按 per-frame 的 unifdef flag 集分别剥私有块，我们的环境里 `$(4)` 展开为空，
+# 全局一刀切又会剥掉内核自己要的宏（bsd/sys/malloc.h 的 ZONE_VIEW_DECLARE）。
+# macOS 上工具链行为就是 HakiOS 作者日常验证的那一套，不需要任何"修 unifdef"的补丁。
+#
+# 产物：mach.ishtar（mach.development.bcm2837）
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'kernel/build-xnu-macos.sh'
+      - '.github/workflows/build-xnu-macos.yml'
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 环境检查（Xcode 工具链）
+        run: |
+          xcode-select -p
+          xcrun --sdk iphoneos --show-sdk-version || true
+          clang --version | head -2
+          sw_vers
+
+      - name: 构建内核（macOS 路径）
+        run: |
+          chmod +x kernel/build-xnu-macos.sh
+          bash kernel/build-xnu-macos.sh arm64
+
+      - name: 输出摘要
+        if: always()
+        run: |
+          ls -l mach.ishtar 2>/dev/null || true
+          echo "--- setup.log 末尾 ---"; tail -20 kernel/work-macos/setup.log 2>/dev/null || true
+          echo "--- xnubuild.log 末尾 ---"; tail -40 kernel/work-macos/xnubuild.log 2>/dev/null || true
+
+      - name: 上传内核
+        uses: actions/upload-artifact@v4
+        with:
+          name: mach-ishtar-kernel-macos
+          path: mach.ishtar
+          if-no-files-found: warn
+
+      - name: 失败时上传日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-macos-logs
+          path: |
+            kernel/work-macos/*.log
+            kernel/xnu-deps/*.log
+          if-no-files-found: warn
