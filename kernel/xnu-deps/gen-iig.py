@@ -114,6 +114,26 @@ def constants(text):
     return seen
 
 
+
+def extend_macro(text, macro_name, decls):
+    """把 decls 追加到已有宏定义里（旧 SDK 头的 _KernelMethods 只有老方法）。"""
+    lines = text.splitlines()
+    for i, l in enumerate(lines):
+        if not re.match(r'\s*#\s*define\s+' + re.escape(macro_name) + r'\b', l):
+            continue
+        j = i
+        while lines[j].rstrip().endswith('\\') and j + 1 < len(lines):
+            j += 1
+        if not lines[j].rstrip().endswith('\\'):
+            lines[j] = lines[j].rstrip() + ' \\'
+        add = []
+        for k, d in enumerate(decls):
+            add.append('    ' + d + (' \\' if k + 1 < len(decls) else ''))
+        lines[i:j + 1] = lines[i:j + 1] + add
+        return '\n'.join(lines) + '\n'
+    return None
+
+
 def rt(ret):
     """Return type as spelled in the .iig, made safe for a declaration."""
     ret = re.sub(r'\b(static|virtual|KERNEL|LOCALONLY|LOCAL)\b', ' ', ret)
@@ -183,6 +203,34 @@ def main(argv):
         lines += decls
     if not append_only:
         lines += ['', '#endif /* __GENIIG_%s_H */' % name]
+
+
+    # --append-only：外科式追加 —— 旧 SDK 头缺什么就补什么，不整体替换
+    if append_only and os.path.exists(hdr) and body is not None:
+        ms = methods(body)
+        add_args = [m for m in ms
+                    if not re.search(r'#\s*define\s+' + name + '_' + m['name'] + '_Args\b', existing)]
+        need_impl = [m for m in ms
+                     if not re.search(r'\b' + m['name'] + r'_Impl\s*\(', existing)]
+        txt_lines = list(lines)
+        for m in add_args:
+            txt_lines.append('#define %s_%s_Args %s' % (name, m['name'], m['args'] if m['args'] else 'void'))
+        if txt_lines:
+            with open(hdr, 'a', encoding='utf-8') as f:
+                f.write('\n'.join(txt_lines) + '\n')
+        if need_impl:
+            decls = ['%s %s_Impl(%s_%s_Args);' % (rt(m['ret']), m['name'], name, m['name'])
+                     for m in need_impl]
+            cur = open(hdr, encoding='utf-8').read()
+            new = extend_macro(cur, name + '_KernelMethods', decls)
+            if new is None:
+                sys.stderr.write('gen-iig: %s 没有 %s_KernelMethods 宏，只能追加到文件尾（会不生效）\n'
+                                 % (name, name))
+            else:
+                open(hdr, 'w', encoding='utf-8').write(new)
+                sys.stderr.write('gen-iig: %s 追加 _Impl 声明 %d 条（%s）\n'
+                                 % (name, len(decls), ', '.join(m['name'] for m in need_impl)))
+        return 0
 
     if append_only:
         with open(hdr, 'a', encoding='utf-8') as f:

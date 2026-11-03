@@ -29,7 +29,10 @@ fi
 # 1b. 这几类在 iOS 26 加了内核方法（Panic / SetPowerOverride / CreatePMAssertion /
 # ReleasePMAssertion / IOExtensiblePaniclog 全套），macOS 13.3 SDK 的预生成头没有这些
 # _Impl 声明，而内核 .cpp 里有定义 → 必须从 .iig 自己生成，不能复用旧头。
-GEN_ALWAYS=" IOService IOUserServer IOExtensiblePaniclog TestDextRematch "
+# 只对“旧 SDK 里根本没有这个类”的两类做整体生成：它们不可能更糟。
+# IOService / IOUserServer 的旧 SDK 头里有大量类型与声明，整体替换会炸（已实测
+# run 41626480776：报错 16 → 790），改用 --append-only 做外科式追加。
+GEN_ALWAYS=" IOExtensiblePaniclog TestDextRematch "
 if [ "${GEN_ALWAYS#* $name }" != "$GEN_ALWAYS" ]; then
   echo "iig shim: $name 有 iOS 26 新增内核方法，从 $def 生成" >&2
   if python3 "$XNUDEPS/gen-iig.py" --def "$def" --header "$hdr" --impl "$impl"; then
