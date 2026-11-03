@@ -1,10 +1,10 @@
 name: build-ishtar-kernel
 
-# Builds the HakiOS kernel for ishtar: Apple XNU 12377.121.6 + xnu-12377.121.6-dada.patch.
-# Runs where cctools and the iOS SDK can actually be built (x86_64 Linux), because the
-# upstream recipe assumes theos, whose Linux toolchain is x86_64 only.
+# 构建 ishtar 的 HakiOS 内核：Apple XNU 12377.121.6 + xnu-12377.121.6-dada.patch。
+# 放在 x86_64 Linux 上跑，因为上游做法依赖 theos，而 theos 的 Linux 工具链只有 x86_64 版；
+# 本机是 aarch64，编 cctools 会一路缺头文件。
 #
-# Artifact: mach.ishtar (mach.development.bcm2837), the kernel that goes into the XNUP payload.
+# 产物：mach.ishtar（mach.development.bcm2837），用来塞进 XNUP 载荷。
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Toolchain
+      - name: 工具链
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -29,26 +29,26 @@ jobs:
             libssl-dev uuid-dev zlib1g-dev libelf-dev
           clang --version | head -1
 
-      - name: Build kernel
+      - name: 构建内核
         run: |
           chmod +x kernel/build-xnu.sh
           bash kernel/build-xnu.sh arm64
 
-      - name: Report
+      - name: 输出摘要
         if: always()
         run: |
           ls -l mach.ishtar 2>/dev/null || true
-          echo "--- setup.log tail ---"; tail -20 kernel/work/setup.log 2>/dev/null || true
-          echo "--- xnubuild.log tail ---"; tail -40 kernel/work/xnubuild.log 2>/dev/null || true
+          echo "--- setup.log 末尾 ---"; tail -20 kernel/work/setup.log 2>/dev/null || true
+          echo "--- xnubuild.log 末尾 ---"; tail -40 kernel/work/xnubuild.log 2>/dev/null || true
 
-      - name: Upload kernel
+      - name: 上传内核
         uses: actions/upload-artifact@v4
         with:
           name: mach-ishtar-kernel
           path: mach.ishtar
           if-no-files-found: warn
 
-      - name: Upload logs
+      - name: 失败时上传日志
         if: failure()
         uses: actions/upload-artifact@v4
         with:
