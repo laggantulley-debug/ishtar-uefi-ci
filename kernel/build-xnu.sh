@@ -89,7 +89,17 @@ find "$HERE/xnu-deps" -name '*.sh' -exec chmod +x {} + 2>/dev/null
 
 log "xnu-deps/setup.sh"
 ( cd "$HERE" && bash xnu-deps/setup.sh ) >"$WORK/setup.log" 2>&1 \
-    || { log "setup.sh 失败，日志如下："; tail -40 "$WORK/setup.log"
+    || { log "setup.sh 失败，日志如下："
+         # 诊断：导出的 lock_rw.h 到底有没有被 unifdef 处理过
+         HDR="$XNU_ROOT/BUILD/obj/EXPORT_HDRS/osfmk/kern/lock_rw.h"
+         if [ -f "$HDR" ]; then
+             log "导出头文件: $(wc -l < "$HDR") 行，__lck_rw_other_extern 出现 $(grep -c __lck_rw_other_extern "$HDR") 次"
+             grep -n "XNU_KERNEL_PRIVATE" "$HDR" | head -3
+         else
+             log "没有生成 $HDR"
+         fi
+         log "unifdef: $(command -v unifdef || echo 未找到)"; unifdef -h 2>&1 | head -2
+         tail -40 "$WORK/setup.log"
          for extra in "$HERE/xnu-deps/exporthdrs.log" "$HERE/xnu-deps/stage2.log" \
                       "$HERE/xnu-deps/mig-build.log" "$HERE/xnu-deps/tcsh-build.log"; do
              [ -f "$extra" ] && { log "--- $(basename "$extra") ---"; tail -40 "$extra"; }
