@@ -87,8 +87,23 @@ find "$HERE/xnu-deps" -name '*.sh' -exec chmod +x {} + 2>/dev/null
 # xnu-clang）：Git API 上传同样丢了 +x，make 会报 "xcrun: Permission denied"。
 [ -d "$HERE/xnu-deps/host/bin" ] && find "$HERE/xnu-deps/host/bin" -type f -exec chmod +x {} + 2>/dev/null
 
-log "xnu-deps/setup.sh"
-( cd "$HERE" && bash xnu-deps/setup.sh ) >"$WORK/setup.log" 2>&1 \
+log "xnu-deps/setup.sh --stage1"
+( cd "$HERE" && bash xnu-deps/setup.sh --stage1 ) >"$WORK/setup.log" 2>&1
+
+# 关键一步：把宿主工具装到 /usr/local/bin。
+# 导出头文件那一步是 csh 脚本 SETUP/config/doconf 驱动的，它可能重置 PATH，
+# 于是 make 找不到 xnu-deps/host/bin/unifdef —— 没有被 unifdef 剥掉
+# XNU_KERNEL_PRIVATE 块的 header 会被原样导出，随后编译就报
+# "upsi.h is XNU private" / "unknown type name 'lck_rw_new_t'"。
+if [ -d "$HERE/xnu-deps/host/bin" ]; then
+    for t in "$HERE"/xnu-deps/host/bin/*; do
+        [ -f "$t" ] && sudo install -m755 "$t" /usr/local/bin/ 2>/dev/null || true
+    done
+    log "宿主工具已装到 /usr/local/bin: $(ls /usr/local/bin | grep -cE 'unifdef|xcrun|sw_vers|plutil|codesign|iig|install|tcsh') 个"
+fi
+
+log "xnu-deps/setup.sh --stage2"
+( cd "$HERE" && bash xnu-deps/setup.sh --stage2 ) >>"$WORK/setup.log" 2>&1 \
     || { log "setup.sh 失败，日志如下："
          # 诊断：导出的 lock_rw.h 到底有没有被 unifdef 处理过
          HDR="$XNU_ROOT/BUILD/obj/EXPORT_HDRS/osfmk/kern/lock_rw.h"
