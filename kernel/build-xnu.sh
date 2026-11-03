@@ -75,7 +75,12 @@ export DARWIN_REDWOOD="$HERE"
 # ---------------------------------------------------------------- 5. dependencies, then the kernel
 log "xnu-deps/setup.sh"
 ( cd "$HERE" && bash xnu-deps/setup.sh ) >"$WORK/setup.log" 2>&1 \
-    || { log "setup.sh 失败，日志如下："; cat "$WORK/setup.log" | tail -60; exit 1; }
+    || { log "setup.sh 失败，日志如下："; tail -40 "$WORK/setup.log"
+         for extra in "$HERE/xnu-deps/exporthdrs.log" "$HERE/xnu-deps/stage2.log" \
+                      "$HERE/xnu-deps/mig-build.log" "$HERE/xnu-deps/tcsh-build.log"; do
+             [ -f "$extra" ] && { log "--- $(basename "$extra") ---"; tail -40 "$extra"; }
+         done
+         exit 1; }
 
 log "xnu-build.sh (MACHINE=BCM2837 XNU_ARCH=$ARCH_STR)"
 ( cd "$HERE" && source xnu-env.sh && XNU_ARCH="$ARCH_STR" MACHINE=BCM2837 \

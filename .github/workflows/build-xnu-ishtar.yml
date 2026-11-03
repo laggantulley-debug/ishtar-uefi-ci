@@ -55,4 +55,5 @@ jobs:
           name: kernel-build-logs
           path: |
             kernel/work/*.log
+            kernel/xnu-deps/*.log
           if-no-files-found: warn
