@@ -73,6 +73,12 @@ export XNU_SRC="$XNU_ROOT"
 export DARWIN_REDWOOD="$HERE"
 
 # ---------------------------------------------------------------- 5. dependencies, then the kernel
+# 内核版本号：MakeInc.kernel:299 会去 SDK/KDK 的 System.kext/Info.plist 里读 CFBundleVersion，
+# 我们的 SDK 是 theos 的公开 SDK，没有 System.kext，于是报
+# "Could not determine xnu version from SDK or KDK"。MakeInc.kernel 自己给了逃生口：
+export RC_DARWIN_KERNEL_VERSION=${RC_DARWIN_KERNEL_VERSION:-12377.121.6}
+log "RC_DARWIN_KERNEL_VERSION=$RC_DARWIN_KERNEL_VERSION"
+
 # 用 Git Data API 上传时丢了可执行位（mode 100644），这里补回来；
 # 否则 setup.sh 里的 stage2 会以 "xnu-build.sh: Permission denied" 失败。
 chmod +x "$HERE/xnu-build.sh" "$HERE/xnu-env.sh" 2>/dev/null
